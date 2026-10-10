@@ -1,30 +1,32 @@
-# ShipNow API — Pre-entrega Módulo 1: Arquitectura Profesional en 3 Capas
+# ShipNow API — Backend 3 (Coderhouse)
 
-API RESTful refactorizada para el curso **Backend 3 (Coderhouse)**, adoptando una arquitectura en capas desacoplada (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque y centralización de constantes del dominio.
+API RESTful modular de logística para **ShipNow**, desarrollada bajo arquitectura profesional en 3 capas (**Controller — Service — Repository**), validación estricta de entorno y un completo **módulo de mocking y seeding de datos de prueba** con Faker.
 
 ---
 
-## 🏛️ Arquitectura del Proyecto
+## 🏛️ Arquitectura del Sistema
 
-El sistema aplica el patrón de diseño en capas para asegurar alta cohesión, bajo acoplamiento y testeabilidad:
+El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad e independencia de la base de datos:
 
 ```text
 [ Cliente HTTP ]
        │
        ▼
- [ Router ]          ──> Enrutamiento mínimo (asocia ruta HTTP con método del Controller)
+ [ Router ]          ──> Enrutamiento declarativo (asocia verbo/path al Controller)
        │
        ▼
-[ Controller ]       ──> Entrada/salida HTTP (gestión de req, res y status codes). NUNCA accede a la BD.
+[ Controller ]       ──> Manejo de req/res, parámetros y status codes. NUNCA accede a MongoDB.
        │
        ▼
- [ Service ]         ──> Lógica de negocio, reglas de dominio, validaciones y cálculos.
+ [ Service ]         ──> Reglas de negocio, validaciones, orquestación y lógica de mocks.
+       │
+       ├───► [ Mocks Generator (Faker) ] ──> Funciones puras que generan datos simulados en memoria.
        │
        ▼
-[ Repository ]       ──> Único punto de acceso y persistencia hacia Mongoose / MongoDB.
+[ Repository ]       ──> Único componente que interactúa con Mongoose / MongoDB.
        │
        ▼
-  [ Model ]          ──> Esquemas y modelos puros de Mongoose sin lógica de negocio.
+  [ Model ]          ──> Esquemas de datos Mongoose con validaciones nativas y constantes.
 ```
 
 ### 📂 Estructura de Directorios
@@ -32,58 +34,164 @@ El sistema aplica el patrón de diseño en capas para asegurar alta cohesión, b
 ```text
 src/
 ├── config/
-│   ├── env.config.js      # Carga y validación estricta de variables de entorno al arranque
-│   └── index.js           # Re-exportación centralizada de configuración
+│   ├── env.config.js          # Carga y validación estricta de variables de entorno al arranque
+│   └── index.js               # Re-exportación de configuración
 ├── constants/
-│   └── index.js           # Constantes inmutables del dominio (Object.freeze: estados, roles, HTTP)
+│   └── index.js               # Constantes inmutables congeladas con Object.freeze
 ├── controllers/
-│   ├── product.controller.js  # Manejador HTTP de endpoints de productos
-│   └── user.controller.js     # Manejador HTTP de endpoints de usuarios
+│   ├── delivery.controller.js # Manejador HTTP de entregas
+│   ├── mock.controller.js     # Manejador HTTP de endpoints de mocks y seed
+│   ├── order.controller.js    # Manejador HTTP de pedidos
+│   ├── product.controller.js  # Manejador HTTP de productos
+│   └── user.controller.js     # Manejador HTTP de usuarios
+├── mocks/
+│   ├── delivery.mock.js       # Generador de entregas simuladas
+│   ├── order.mock.js          # Generador de pedidos simulados
+│   └── user.mock.js           # Generador de usuarios y repartidores simulados con Faker
 ├── models/
+│   ├── delivery.model.js      # Esquema Mongoose de Entrega
+│   ├── order.model.js         # Esquema Mongoose de Pedido
 │   ├── product.model.js       # Esquema Mongoose de Producto
 │   └── user.model.js          # Esquema Mongoose de Usuario
 ├── repositories/
-│   ├── product.repository.js  # Capa de datos y consultas para productos
-│   └── user.repository.js     # Capa de datos y consultas para usuarios
+│   ├── delivery.repository.js # Capa de datos para entregas
+│   ├── order.repository.js    # Capa de datos para pedidos
+│   ├── product.repository.js  # Capa de datos para productos
+│   └── user.repository.js     # Capa de datos para usuarios
 ├── routes/
-│   ├── products.js            # Enrutador mínimo de productos
-│   └── users.js               # Enrutador mínimo de usuarios
+│   ├── deliveries.js          # Enrutador de entregas
+│   ├── mocks.js               # Enrutador de mocking y seed (/api/mocks)
+│   ├── orders.js              # Enrutador de pedidos
+│   ├── products.js            # Enrutador de productos
+│   └── users.js               # Enrutador de usuarios
 ├── services/
-│   ├── product.service.js     # Lógica de negocio y cotización de envíos
-│   └── user.service.js        # Lógica de negocio y reglas de creación de usuarios
+│   ├── delivery.service.js    # Lógica de negocio de entregas
+│   ├── mocks.service.js       # Lógica de mocking y control de inserción (seed)
+│   ├── order.service.js       # Lógica de negocio y cálculo de envíos
+│   ├── product.service.js     # Lógica de negocio de productos
+│   └── user.service.js        # Lógica de negocio de usuarios
 ├── utils/
-│   └── constants.js           # Exportación compatible de constantes
+│   ├── constants.js           # Constantes del dominio
+│   └── errors.js              # Clase AppError con código HTTP
 └── server.js                  # Inicialización y arranque del servidor Express
 ```
 
 ---
 
-## 💡 Justificación: Separación entre Service y Repository
+## 🎭 Módulo de Mocking y Carga de Datos de Prueba (Pre-entrega Módulo 2)
 
-En el desarrollo de software profesional, la separación entre **Service** y **Repository** responde al **Principio de Responsabilidad Única (SRP)** y a la inversión de dependencias:
+El módulo de mocking permite generar datos simulados realistas (**usuarios, repartidores, pedidos y entregas**) mediante **@faker-js/faker** sin depender de registros manuales y manteniendo estricta coherencia entre modelos y relaciones.
 
-1. **¿Qué hace el Repository?**
-   - Es el **único componente del sistema que conoce el ORM/ODM (Mongoose)** y la tecnología de base de datos.
-   - **No es un simple "pasamanos"**: encapsula proyecciones, ordenamientos por defecto, filtros comunes (por ejemplo, `findAvailable()`), y optimizaciones de consulta.
-   - Si mañana se decide migrar de MongoDB a PostgreSQL o DynamoDB, **solo se reemplaza o adapta el Repository**, sin modificar una sola línea de la lógica de negocio ni de los controladores.
+### 🔌 Endpoints de Mocking (`/api/mocks`)
 
-2. **¿Qué hace el Service?**
-   - Contiene **toda la lógica y las reglas de negocio del dominio**:
-     - Validación de que un producto tenga precio no negativo y código único antes de persistir.
-     - Determinación automática del estado (`available` vs `out_of_stock`) según el stock ingresado.
-     - Reglas de seguridad: impedir que se creen usuarios administradores (`role: 'admin'`) desde el endpoint público de registro.
-     - Cálculo y cotización dinámica de costos de envío (`calculateShippingCost`) basándose en el entorno (`development` vs `production`).
-     - Orquestación de servicios externos (ej. envío simulado de notificaciones por email).
-   - El Service no sabe si los datos provienen de MongoDB, Redis o una API externa; trabaja exclusivamente con entidades y reglas de negocio.
+| Método | Endpoint | Parámetros | Descripción |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/mocks/users` | `?qty=N` (default: 10, máx: 400) | Devuelve usuarios simulados **en memoria** (sin guardarlos en BD) |
+| `GET` | `/api/mocks/orders` | `?qty=N` (default: 10, máx: 400) | Devuelve pedidos simulados en memoria |
+| `GET` | `/api/mocks/deliveries` | `?qty=N` (default: 10, máx: 400) | Devuelve entregas simuladas en memoria |
+| `GET` | `/api/mocks/all` | `?qty=N` (default: 10, máx: 400) | Devuelve un conjunto completo simulado en memoria |
+| `POST` | `/api/mocks/seed` | `?qty=N&collection=...` o en body | Inserta datos de prueba en MongoDB de forma controlada |
 
-3. **¿Por qué el Controller no accede al Repository?**
-   - El Controller es exclusivamente un adaptador de transporte (HTTP): extrae parámetros de la petición (`req.params`, `req.body`, `req.query`), delega la operación al Service y devuelve la respuesta HTTP adecuada (`200`, `201`, `400`, `403`, `404`, `500`). Mantenerlo desacoplado de la base de datos garantiza que la misma lógica de negocio pueda exponerse a través de REST, GraphQL, WebSockets o tareas en segundo plano.
+---
+
+### 1. Obtención de Mocks en Memoria (Sin Guardar)
+
+#### `GET /api/mocks/users?qty=2`
+Devuelve usuarios de prueba (clientes y repartidores) con datos realistas generados al vuelo:
+
+```json
+[
+  {
+    "nombre": "Ana Pérez",
+    "email": "ana.perez.8k12a@shipnow.test",
+    "rol": "cliente"
+  },
+  {
+    "nombre": "Luis Gómez",
+    "email": "luis.gomez.9f33b@shipnow.test",
+    "rol": "repartidor"
+  }
+]
+```
+
+#### `GET /api/mocks/orders?qty=2`
+Devuelve pedidos simulados respetando items, precios positivos, dirección de entrega, totales y estados permitidos:
+
+```json
+[
+  {
+    "customer": "651f8a...",
+    "items": [
+      { "name": "Caja de embalaje", "quantity": 2, "price": 1500 }
+    ],
+    "deliveryAddress": "Av. Corrientes 1234, CABA",
+    "declaredValue": 3000,
+    "shippingCost": 10,
+    "total": 3010,
+    "status": "created",
+    "priority": "normal"
+  }
+]
+```
+
+---
+
+### 2. Carga de Datos de Prueba en Base de Datos (`POST /api/mocks/seed`)
+
+Inserta registros de prueba en MongoDB de forma controlada, validando esquemas y manteniendo las relaciones entre entidades.
+
+#### Opciones de colección soportadas (`collection` o `coleccion` por query o body):
+- `usuarios` (por defecto): Genera e inserta usuarios y repartidores.
+- `pedidos`: Genera clientes y les crea pedidos vinculados.
+- `entregas`: Genera clientes, repartidores, pedidos y crea entregas vinculadas.
+- `all` / `completo`: Genera e inserta la cadena completa interrelacionada.
+
+#### Ejemplo 1: Carga de usuarios (Ejemplo del Briefing)
+```bash
+POST /api/mocks/seed?qty=10
+```
+Respuesta:
+```json
+{
+  "insertados": 10,
+  "coleccion": "usuarios"
+}
+```
+
+#### Ejemplo 2: Carga de pedidos
+```bash
+POST /api/mocks/seed?qty=5&collection=pedidos
+```
+Respuesta:
+```json
+{
+  "insertados": 5,
+  "coleccion": "pedidos"
+}
+```
+
+#### Validaciones del endpoint de Seed:
+- `qty` debe ser un número entero mayor a 0 y menor o igual a 400.
+- Si se envía un valor inválido (ej. `?qty=-1`, `?qty=abc` o `?qty=401`), la API responde con status **400 Bad Request** y un mensaje descriptivo.
+
+---
+
+## 🔒 Constantes Inmutables del Dominio
+
+Todas las constantes se encuentran centralizadas en `src/constants/index.js` y congeladas con `Object.freeze`:
+
+- **Roles de Usuario (`USER_ROLES`):** `ADMIN`, `CUSTOMER`, `DRIVER`, `STORE`, `USER`.
+- **Estados de Pedido (`ORDER_STATUS`):** `CREATED`, `ASSIGNED`, `PICKED_UP`, `IN_TRANSIT`, `DELIVERED`, `CANCELLED`.
+- **Estados de Entrega (`DELIVERY_STATUS`):** `PENDING`, `ASSIGNED`, `IN_TRANSIT`, `DELIVERED`.
+- **Prioridades (`DELIVERY_PRIORITY`):** `LOW`, `NORMAL`, `HIGH`.
+- **Estados de Producto (`PRODUCT_STATUS`):** `AVAILABLE`, `OUT_OF_STOCK`.
+- **Códigos HTTP (`HTTP_STATUS`):** `OK`, `CREATED`, `BAD_REQUEST`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_SERVER_ERROR`.
 
 ---
 
 ## ⚙️ Configuración y Variables de Entorno
 
-La configuración está centralizada en `src/config/env.config.js` y cuenta con **validación estricta al arranque**. Si falta alguna variable obligatoria (`PORT`, `MONGODB_URI`, `NODE_ENV`), la aplicación aborta su ejecución arrojando un error descriptivo:
+La configuración está centralizada en `src/config/env.config.js` con **validación estricta al arranque**. Si falta alguna variable requerida (`PORT`, `MONGODB_URI`, `NODE_ENV`), la aplicación aborta inmediatamente con un error claro:
 
 ```text
 [ERROR DE CONFIGURACIÓN] Faltan variables de entorno críticas requeridas: MONGODB_URI. La aplicación no puede iniciar sin esta configuración.
@@ -91,10 +199,8 @@ La configuración está centralizada en `src/config/env.config.js` y cuenta con 
 
 ### Archivo `.env.example`
 
-Se incluye el archivo `.env.example` con las claves necesarias sin exponer secretos:
-
 ```env
-# Configuración de Entorno y Servidor
+# Entorno y Servidor
 PORT=8080
 NODE_ENV=development
 
@@ -106,38 +212,19 @@ JWT_SECRET=tu_clave_secreta_jwt
 SHIPPING_API_KEY=tu_shipping_api_key
 ```
 
-> **Nota de seguridad:** El archivo `.env` real está incluido en el `.gitignore` y nunca se sube al repositorio.
-
----
-
-## 🔒 Centralización de Constantes
-
-Se eliminaron los "magic strings" y se definieron objetos inmutables mediante `Object.freeze` en `src/constants/index.js`:
-
-- **Estados de Producto (`PRODUCT_STATUS`):**
-  - `AVAILABLE`: `'available'`
-  - `OUT_OF_STOCK`: `'out_of_stock'`
-- **Roles de Usuario (`USER_ROLES`):**
-  - `ADMIN`: `'admin'`
-  - `USER`: `'user'`
-- **Códigos de Estado HTTP (`HTTP_STATUS`):**
-  - Centralización de `OK (200)`, `CREATED (201)`, `BAD_REQUEST (400)`, `FORBIDDEN (403)`, `NOT_FOUND (404)`, `INTERNAL_SERVER_ERROR (500)`.
-
 ---
 
 ## 🚀 Instalación y Puesta en Marcha
 
 ### Prerrequisitos
-
-- **Node.js** (versión 18 o superior)
-- **MongoDB** en ejecución local o una instancia en la nube (MongoDB Atlas)
+- **Node.js** (v18+)
+- **MongoDB** local o Atlas
 
 ### Pasos
-
 1. **Clonar el repositorio:**
    ```bash
-   git clone https://github.com/Tiagopinfari/proyecto-backend-III.git
-   cd proyecto-backend-III
+   git clone https://github.com/Tiagopinfari/proyecto-ShipNow.git
+   cd proyecto-ShipNow
    ```
 
 2. **Instalar dependencias:**
@@ -146,90 +233,67 @@ Se eliminaron los "magic strings" y se definieron objetos inmutables mediante `O
    ```
 
 3. **Configurar el archivo de entorno:**
-   Copia el archivo de ejemplo y completa los valores correspondientes:
    ```bash
    cp .env.example .env
    ```
 
-   Ejemplo de contenido para `.env`:
-   ```env
-   PORT=8080
-   NODE_ENV=development
-   MONGODB_URI=mongodb://localhost:27017/shipnow
-   JWT_SECRET=mi_clave_secreta
-   SHIPPING_API_KEY=shipnow_shipping_key_123
-   ```
-
-4. **Ejecutar en modo desarrollo:**
+4. **Iniciar en modo desarrollo:**
    ```bash
    npm run dev
    ```
 
-5. **Ejecutar en modo producción:**
+5. **Iniciar en modo producción:**
    ```bash
    npm start
    ```
 
 ---
 
-## 📡 Endpoints de la API
+## 📡 Tabla General de Endpoints
 
 ### Health Check
+- `GET /api/health` — Estado general de la API y timestamp.
 
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `GET` | `/api/health` | Chequeo de estado del servicio, entorno y timestamp |
-
----
-
-### Productos (`/api/products`)
-
-| Método | Endpoint | Descripción | Status Codes |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/products` | Lista productos con stock disponible (`?all=true` incluye sin stock) | `200`, `500` |
-| `GET` | `/api/products/:id` | Obtiene detalle de un producto por ID | `200`, `404`, `500` |
-| `GET` | `/api/products/:id/shipping-cost` | Cotiza el envío del producto según el entorno | `200`, `404`, `500` |
-| `POST` | `/api/products` | Crea un nuevo producto validando campos obligatorios y unicidad de código | `201`, `400`, `500` |
-| `PUT` | `/api/products/:id` | Actualiza un producto y sincroniza el estado según el stock | `200`, `400`, `404`, `500` |
-| `DELETE` | `/api/products/:id` | Elimina un producto por ID | `200`, `404`, `500` |
-
-#### Ejemplo POST `/api/products`:
-```json
-{
-  "title": "Auriculares Inalámbricos Pro",
-  "code": "AUR-PRO-01",
-  "price": 25000,
-  "stock": 15,
-  "category": "audio",
-  "description": "Auriculares con cancelación de ruido activa"
-}
-```
-
----
+### Mocks (`/api/mocks`)
+- `GET /api/mocks/users?qty=2` — Mocks de usuarios en memoria.
+- `GET /api/mocks/orders?qty=2` — Mocks de pedidos en memoria.
+- `GET /api/mocks/deliveries?qty=2` — Mocks de entregas en memoria.
+- `GET /api/mocks/all?qty=5` — Mocks de usuarios, pedidos y entregas en memoria.
+- `POST /api/mocks/seed?qty=10` — Inserción controlada en MongoDB (`usuarios`, `pedidos`, `entregas`, `all`).
 
 ### Usuarios (`/api/users`)
+- `GET /api/users` — Listar usuarios.
+- `GET /api/users/:id` — Obtener usuario por ID.
+- `POST /api/users` — Crear usuario.
+- `PUT /api/users/:id` — Actualizar usuario.
+- `DELETE /api/users/:id` — Eliminar usuario.
 
-| Método | Endpoint | Descripción | Status Codes |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/users` | Lista todos los usuarios registrados | `200`, `500` |
-| `GET` | `/api/users/:id` | Obtiene detalle de un usuario por ID | `200`, `404`, `500` |
-| `POST` | `/api/users` | Registra un usuario (impide creación de `role: 'admin'`) | `201`, `400`, `403`, `500` |
-| `PUT` | `/api/users/:id` | Actualiza datos de un usuario por ID | `200`, `404`, `500` |
-| `DELETE` | `/api/users/:id` | Elimina un usuario por ID | `200`, `404`, `500` |
+### Pedidos (`/api/orders`)
+- `GET /api/orders` — Listar pedidos con clientes poblados.
+- `GET /api/orders/:id` — Obtener pedido por ID.
+- `POST /api/orders` — Crear pedido (calcula envío y total).
+- `PUT /api/orders/:id` — Actualizar pedido.
+- `DELETE /api/orders/:id` — Eliminar pedido.
 
-#### Ejemplo POST `/api/users`:
-```json
-{
-  "firstName": "Tiago",
-  "lastName": "Pérez",
-  "email": "tiago@example.com",
-  "password": "PasswordSeguro123!"
-}
-```
+### Entregas (`/api/deliveries`)
+- `GET /api/deliveries` — Listar entregas con pedidos y repartidores.
+- `GET /api/deliveries/:id` — Obtener entrega por ID.
+- `POST /api/deliveries` — Crear entrega vinculada a pedido y repartidor.
+- `PUT /api/deliveries/:id` — Actualizar entrega.
+- `DELETE /api/deliveries/:id` — Eliminar entrega.
+
+### Productos (`/api/products`)
+- `GET /api/products` — Listar productos disponibles (`?all=true` incluye sin stock).
+- `GET /api/products/:id` — Obtener producto por ID.
+- `GET /api/products/:id/shipping-cost` — Cotizar costo de envío.
+- `POST /api/products` — Crear producto.
+- `PUT /api/products/:id` — Actualizar producto.
+- `DELETE /api/products/:id` — Eliminar producto.
 
 ---
 
 ## 👨‍💻 Autor
 
+- **Tiago Pinfari**
 - **Curso:** Backend 3 — Coderhouse
 - **Proyecto:** ShipNow API
