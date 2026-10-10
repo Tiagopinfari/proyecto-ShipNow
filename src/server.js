@@ -4,6 +4,9 @@ import mongoose from 'mongoose';
 import config from './config/env.config.js';
 import usersRouter from './routes/users.js';
 import productsRouter from './routes/products.js';
+import ordersRouter from './routes/orders.js';
+import deliveriesRouter from './routes/deliveries.js';
+import mocksRouter from './routes/mocks.js';
 
 const app = express();
 
@@ -13,6 +16,9 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/users', usersRouter);
 app.use('/api/products', productsRouter);
+app.use('/api/orders', ordersRouter);
+app.use('/api/deliveries', deliveriesRouter);
+app.use('/api/mocks', mocksRouter);
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -24,7 +30,19 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use((req, res) => {
-  res.status(404).send('Ruta no encontrada');
+  res.status(404).json({ status: 'error', message: 'Ruta no encontrada' });
+});
+
+// Middleware de manejo centralizado de errores
+app.use((err, req, res, next) => {
+  const isClientError = err.name === 'CastError' || err.name === 'ValidationError';
+  const statusCode = err.statusCode || (isClientError ? 400 : 500);
+  const message = err.name === 'CastError' ? 'ID inválido' : err.message;
+
+  res.status(statusCode).json({
+    status: 'error',
+    message: message || 'Error interno del servidor'
+  });
 });
 
 mongoose.connect(config.MONGODB_URI)
