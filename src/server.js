@@ -7,6 +7,8 @@ import productsRouter from './routes/products.js';
 import ordersRouter from './routes/orders.js';
 import deliveriesRouter from './routes/deliveries.js';
 import mocksRouter from './routes/mocks.js';
+import { errorHandler } from './middlewares/errorHandler.js';
+import { notFoundHandler } from './middlewares/notFoundHandler.js';
 
 const app = express();
 
@@ -29,21 +31,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.use((req, res) => {
-  res.status(404).json({ status: 'error', message: 'Ruta no encontrada' });
-});
+// Middleware para rutas no encontradas (404)
+app.use(notFoundHandler);
 
-// Middleware de manejo centralizado de errores
-app.use((err, req, res, next) => {
-  const isClientError = err.name === 'CastError' || err.name === 'ValidationError';
-  const statusCode = err.statusCode || (isClientError ? 400 : 500);
-  const message = err.name === 'CastError' ? 'ID inválido' : err.message;
-
-  res.status(statusCode).json({
-    status: 'error',
-    message: message || 'Error interno del servidor'
-  });
-});
+// Middleware global de manejo uniforme de errores
+app.use(errorHandler);
 
 mongoose.connect(config.MONGODB_URI)
   .then(() => {
