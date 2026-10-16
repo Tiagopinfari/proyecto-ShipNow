@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import mongoose from 'mongoose';
 import { USER_ROLES } from '../constants/index.js';
 
 export const generateMockUser = (options = {}) => {
@@ -15,14 +16,11 @@ export const generateMockUser = (options = {}) => {
     { weight: 1, value: USER_ROLES.DRIVER }
   ]);
 
-  const rol = role === USER_ROLES.CUSTOMER ? 'cliente' : (role === USER_ROLES.DRIVER ? 'repartidor' : role);
-
   return {
-    nombre: `${firstName} ${lastName}`,
-    email,
-    rol,
+    _id: options.withId ? new mongoose.Types.ObjectId() : undefined,
     firstName,
     lastName,
+    email,
     password,
     role
   };
