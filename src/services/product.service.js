@@ -1,6 +1,14 @@
 import productRepository from '../repositories/product.repository.js';
 import { PRODUCT_STATUS } from '../constants/index.js';
 import config from '../config/env.config.js';
+import {
+  ProductNotFoundError,
+  ValidationError,
+  ConflictError,
+  DatabaseOperationError
+} from '../utils/errors.js';
+import { createError } from '../utils/apiResponse.js';
+import { ERROR_CODES } from '../utils/errorDictionary.js';
 
 const emailProvider = {
   send: async (message) => {
@@ -9,11 +17,6 @@ const emailProvider = {
 };
 
 class ProductService {
-  /**
-   * Recupera la lista de productos según la regla de negocio.
-   * Si all es true, retorna todos los productos del catálogo.
-   * Si all es false o no viene especificado, retorna solo los disponibles para la venta.
-   */
   async getProducts({ all = false } = {}) {
     if (all === true || all === 'true') {
       return await productRepository.findAll();
@@ -21,56 +24,36 @@ class ProductService {
     return await productRepository.findAvailable();
   }
 
-  /**
-   * Obtiene un producto por su ID.
-   * Valida existencia y reglas de negocio asociadas.
-   */
   async getProductById(id) {
     const product = await productRepository.findById(id);
     if (!product) {
-      const error = new Error('Producto no encontrado');
-      error.statusCode = 404;
-      throw error;
+      throw new ProductNotFoundError('Producto no encontrado');
     }
     return product;
   }
 
-  /**
-   * Crea un nuevo producto validando campos obligatorios,
-   * unicidad de código, consistencia de stock y estado inicial.
-   */
   async createProduct(productData) {
     const { title, code, price, stock = 0, description, category } = productData;
 
     if (!title || !code || price === undefined || price === null) {
-      const error = new Error('Faltan campos obligatorios');
-      error.statusCode = 400;
-      throw error;
+      throw new ValidationError('Faltan campos obligatorios para crear el producto (title, code, price)');
     }
 
     const numericPrice = Number(price);
     if (isNaN(numericPrice) || numericPrice < 0) {
-      const error = new Error('Precio inválido');
-      error.statusCode = 400;
-      throw error;
+      throw new ValidationError('Precio inválido: no puede ser negativo ni contener caracteres');
     }
 
     const numericStock = Number(stock) || 0;
     if (numericStock < 0) {
-      const error = new Error('El stock no puede ser negativo');
-      error.statusCode = 400;
-      throw error;
+      throw new ValidationError('El stock no puede ser negativo');
     }
 
     const existingProduct = await productRepository.findByCode(code);
     if (existingProduct) {
-      const error = new Error('Ya existe un producto con el código especificado');
-      error.statusCode = 400;
-      error.customResponse = { status: 'error', data: null };
-      throw error;
+      throw new ConflictError('Ya existe un producto con el código especificado');
     }
 
-    // Regla de negocio: determinación automática del estado según el stock inicial
     const initialStatus = numericStock > 0 ? PRODUCT_STATUS.AVAILABLE : PRODUCT_STATUS.OUT_OF_STOCK;
 
     const newProduct = await productRepository.create({
@@ -83,19 +66,14 @@ class ProductService {
       status: initialStatus
     });
 
-    // Disparar notificación por email (simulada)
     await emailProvider.send(`Producto creado: ${newProduct.title}`);
 
     return newProduct;
   }
 
-  /**
-   * Actualiza un producto normalizando estados y recalculando disponibilidad
-   */
   async updateProduct(id, updateData) {
     const payload = { ...updateData };
 
-    // Normalización de estados ingresados en distintos formatos
     if (typeof payload.status === 'string') {
       const normalizedStatus = payload.status.toLowerCase();
       if (normalizedStatus === PRODUCT_STATUS.OUT_OF_STOCK) {
@@ -105,13 +83,10 @@ class ProductService {
       }
     }
 
-    // Regla de negocio: si se actualiza el stock, sincronizar el estado
     if (payload.stock !== undefined) {
       const numericStock = Number(payload.stock);
       if (numericStock < 0) {
-        const error = new Error('El stock no puede ser negativo');
-        error.statusCode = 400;
-        throw error;
+        throw new ValidationError('El stock no puede ser negativo');
       }
       payload.stock = numericStock;
       payload.status = numericStock > 0 ? PRODUCT_STATUS.AVAILABLE : PRODUCT_STATUS.OUT_OF_STOCK;
@@ -119,40 +94,27 @@ class ProductService {
 
     const updatedProduct = await productRepository.update(id, payload);
     if (!updatedProduct) {
-      const error = new Error('Producto no encontrado');
-      error.statusCode = 404;
-      throw error;
+      throw new ProductNotFoundError('Producto no encontrado');
     }
 
     return updatedProduct;
   }
 
-  /**
-   * Elimina un producto por ID
-   */
   async deleteProduct(id) {
     const deletedProduct = await productRepository.delete(id);
     if (!deletedProduct) {
-      const error = new Error('Producto no encontrado');
-      error.statusCode = 404;
-      throw error;
+      throw new ProductNotFoundError('Producto no encontrado');
     }
     return { message: 'Producto eliminado' };
   }
 
-  /**
-   * Lógica de negocio para cotizar el costo de envío de un producto
-   */
   async calculateShippingCost(id) {
     const product = await this.getProductById(id);
 
     if (!config.SHIPPING_API_KEY) {
-      const error = new Error('Falta API key');
-      error.statusCode = 500;
-      throw error;
+      throw createError(ERROR_CODES.INTERNAL_SERVER_ERROR, 'Falta API key de envíos');
     }
 
-    // Regla de cotización de envío
     const shippingCost = config.isProduction ? 50 + product.price * 0.01 : 10;
 
     return {

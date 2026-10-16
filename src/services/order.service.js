@@ -1,12 +1,19 @@
 import orderRepository from '../repositories/order.repository.js';
 import userRepository from '../repositories/user.repository.js';
-import { AppError } from '../utils/errors.js';
+import {
+  OrderNotFoundError,
+  UserNotFoundError,
+  ValidationError,
+  InvalidStatusError
+} from '../utils/errors.js';
 import config from '../config/env.config.js';
 import { ORDER_STATUS, DELIVERY_PRIORITY } from '../constants/index.js';
+import { createError } from '../utils/apiResponse.js';
+import { ERROR_CODES } from '../utils/errorDictionary.js';
 
 export const calculateShippingCost = ({ isProduction, shipmentValue, apiKey }) => {
   if (!apiKey) {
-    throw new AppError('Configuración inválida: falta API Key', 500);
+    throw createError(ERROR_CODES.INTERNAL_SERVER_ERROR, 'Configuración inválida: falta API Key');
   }
   if (isProduction) {
     return 50 + shipmentValue * 0.01;
@@ -22,7 +29,7 @@ class OrderService {
   async getOrderById(id) {
     const order = await orderRepository.getById(id);
     if (!order) {
-      throw new AppError('Pedido no encontrado', 404);
+      throw new OrderNotFoundError('Pedido no encontrado');
     }
     return order;
   }
@@ -30,11 +37,19 @@ class OrderService {
   async createOrder(newOrder) {
     const customer = await userRepository.getById(newOrder.customer);
     if (!customer) {
-      throw new AppError('El cliente especificado no existe', 400);
+      throw new UserNotFoundError('El cliente especificado no existe');
     }
 
     if (!newOrder.items || !Array.isArray(newOrder.items) || newOrder.items.length === 0) {
-      throw new AppError('El pedido debe tener al menos un item', 400);
+      throw new ValidationError('El pedido debe tener al menos un item');
+    }
+
+    if (newOrder.status && !Object.values(ORDER_STATUS).includes(newOrder.status)) {
+      throw new InvalidStatusError('Estado de pedido inválido');
+    }
+
+    if (newOrder.priority && !Object.values(DELIVERY_PRIORITY).includes(newOrder.priority)) {
+      throw new InvalidStatusError('Prioridad de pedido inválida');
     }
 
     const itemsTotal = newOrder.items.reduce(
@@ -61,7 +76,7 @@ class OrderService {
   async updateOrder(id, updates) {
     const order = await orderRepository.update(id, updates);
     if (!order) {
-      throw new AppError('Pedido no encontrado', 404);
+      throw new OrderNotFoundError('Pedido no encontrado');
     }
     return order;
   }
@@ -69,7 +84,7 @@ class OrderService {
   async deleteOrder(id) {
     const order = await orderRepository.delete(id);
     if (!order) {
-      throw new AppError('Pedido no encontrado', 404);
+      throw new OrderNotFoundError('Pedido no encontrado');
     }
     return { message: 'Pedido eliminado' };
   }
