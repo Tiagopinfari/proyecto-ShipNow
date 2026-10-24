@@ -7,6 +7,7 @@ import {
   InvalidStatusError
 } from '../utils/errors.js';
 import config from '../config/env.config.js';
+import logger from '../config/logger.js';
 import { ORDER_STATUS, DELIVERY_PRIORITY } from '../constants/index.js';
 import { createError } from '../utils/apiResponse.js';
 import { ERROR_CODES } from '../utils/errorDictionary.js';
@@ -29,6 +30,7 @@ class OrderService {
   async getOrderById(id) {
     const order = await orderRepository.getById(id);
     if (!order) {
+      logger.warning(`Consulta de pedido inexistente: ID ${id}`);
       throw new OrderNotFoundError('Pedido no encontrado');
     }
     return order;
@@ -37,10 +39,12 @@ class OrderService {
   async createOrder(newOrder) {
     const customer = await userRepository.getById(newOrder.customer);
     if (!customer) {
+      logger.warning(`Fallo al crear pedido: cliente inexistente ID ${newOrder.customer}`);
       throw new UserNotFoundError('El cliente especificado no existe');
     }
 
     if (!newOrder.items || !Array.isArray(newOrder.items) || newOrder.items.length === 0) {
+      logger.warning('Fallo al crear pedido: no contiene items');
       throw new ValidationError('El pedido debe tener al menos un item');
     }
 
@@ -63,7 +67,7 @@ class OrderService {
       apiKey: config.SHIPPING_API_KEY || config.JWT_SECRET
     });
 
-    return await orderRepository.create({
+    const createdOrder = await orderRepository.create({
       ...newOrder,
       declaredValue,
       shippingCost,
@@ -71,21 +75,28 @@ class OrderService {
       status: ORDER_STATUS.CREATED,
       priority: newOrder.priority || DELIVERY_PRIORITY.NORMAL
     });
+
+    logger.info(`Pedido creado exitosamente con ID: ${createdOrder._id} (total: $${createdOrder.total})`);
+    return createdOrder;
   }
 
   async updateOrder(id, updates) {
     const order = await orderRepository.update(id, updates);
     if (!order) {
+      logger.warning(`Intento de actualización en pedido inexistente: ID ${id}`);
       throw new OrderNotFoundError('Pedido no encontrado');
     }
+    logger.info(`Pedido actualizado exitosamente: ID ${id}`);
     return order;
   }
 
   async deleteOrder(id) {
     const order = await orderRepository.delete(id);
     if (!order) {
+      logger.warning(`Intento de eliminación en pedido inexistente: ID ${id}`);
       throw new OrderNotFoundError('Pedido no encontrado');
     }
+    logger.info(`Pedido eliminado exitosamente: ID ${id}`);
     return { message: 'Pedido eliminado' };
   }
 }

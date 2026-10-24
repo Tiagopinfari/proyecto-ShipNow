@@ -1,18 +1,18 @@
 import productRepository from '../repositories/product.repository.js';
 import { PRODUCT_STATUS } from '../constants/index.js';
 import config from '../config/env.config.js';
+import logger from '../config/logger.js';
 import {
   ProductNotFoundError,
   ValidationError,
-  ConflictError,
-  DatabaseOperationError
+  ConflictError
 } from '../utils/errors.js';
 import { createError } from '../utils/apiResponse.js';
 import { ERROR_CODES } from '../utils/errorDictionary.js';
 
 const emailProvider = {
   send: async (message) => {
-    console.log('[EMAIL] ' + message);
+    logger.info(`[EMAIL NOTIFICACIÓN] ${message}`);
   }
 };
 
@@ -27,6 +27,7 @@ class ProductService {
   async getProductById(id) {
     const product = await productRepository.findById(id);
     if (!product) {
+      logger.warning(`Producto no encontrado con ID: ${id}`);
       throw new ProductNotFoundError('Producto no encontrado');
     }
     return product;
@@ -66,6 +67,7 @@ class ProductService {
       status: initialStatus
     });
 
+    logger.info(`Producto creado exitosamente: "${newProduct.title}" (Código: ${newProduct.code})`);
     await emailProvider.send(`Producto creado: ${newProduct.title}`);
 
     return newProduct;
@@ -94,17 +96,21 @@ class ProductService {
 
     const updatedProduct = await productRepository.update(id, payload);
     if (!updatedProduct) {
+      logger.warning(`Intento de actualización en producto inexistente: ID ${id}`);
       throw new ProductNotFoundError('Producto no encontrado');
     }
 
+    logger.info(`Producto actualizado con éxito: ID ${id}`);
     return updatedProduct;
   }
 
   async deleteProduct(id) {
     const deletedProduct = await productRepository.delete(id);
     if (!deletedProduct) {
+      logger.warning(`Intento de eliminación en producto inexistente: ID ${id}`);
       throw new ProductNotFoundError('Producto no encontrado');
     }
+    logger.info(`Producto eliminado con éxito: ID ${id}`);
     return { message: 'Producto eliminado' };
   }
 
