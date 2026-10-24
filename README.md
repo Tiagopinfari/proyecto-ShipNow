@@ -1,108 +1,140 @@
 # ShipNow API — Backend 3 (Coderhouse)
 
-API RESTful profesional de logística para **ShipNow**, desarrollada bajo arquitectura en 3 capas (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque, módulo de mocking con Faker y una **capa centralizada de gestión profesional de errores** (Pre-entrega Módulo 3).
+API RESTful profesional de logística para **ShipNow**, desarrollada bajo arquitectura en 3 capas (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque, módulo de mocking con Faker, capa centralizada de manejo de errores y un **sistema profesional de logging y monitoreo básico con Winston** (Pre-entrega Módulo 4).
 
 ---
 
 ## 🏛️ Arquitectura del Sistema
 
-El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad, independencia de la base de datos y tratamiento uniforme de errores:
+El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad, independencia de la base de datos y observabilidad completa mediante logs:
 
 ```text
 [ Cliente HTTP ]
        │
        ▼
- [ Router ]          ──> Enrutamiento declarativo (asocia verbo/path al Controller)
+ [ httpLogger Middleware ] ──► Registra peticiones HTTP con Winston (método, URL, status, duración)
        │
        ▼
-[ Controller ]       ──> Manejo de req/res. NO genera respuestas de error: delega en next(error).
+ [ Router ]                ──► Enrutamiento declarativo (asocia verbo/path al Controller)
        │
        ▼
- [ Service ]         ──> Reglas de negocio. Detecta y arroja Errores Personalizados del Dominio.
-       │
-       ├───► [ Mocks Generator (Faker) ] ──> Generación de datos simulados en memoria.
+[ Controller ]             ──► Manejo de req/res. Delega errores en next(error) sin emitir logs duplicados.
        │
        ▼
-[ Repository ]       ──> Único componente que interactúa con Mongoose / MongoDB.
+ [ Service ]               ──► Reglas de negocio. Emite logs informativos y advertencias de dominio.
+       │
+       ├───► [ Mocks Generator ] ──► Generación de datos simulados en memoria con Faker.
        │
        ▼
-  [ Model ]          ──> Esquemas de datos Mongoose con validaciones nativas.
+[ Repository ]             ──► Único componente que interactúa con Mongoose / MongoDB.
+       │
+       ▼
+  [ Model ]                ──► Esquemas de datos Mongoose con validaciones nativas.
 
 ─────────────────────────────────────────────────────────────────────────────
-[ CAPA CENTRALIZADA DE ERRORES ]
+[ CAPA CENTRALIZADA DE GESTIÓN Y LOGS DE ERRORES ]
 ─────────────────────────────────────────────────────────────────────────────
-notFoundHandler (404) ──► errorHandler (Middleware Global) ──► Respuesta Uniforme
-       ▲
-       │ (next(error))
-Services / Controllers ──► Error Personalizado + Diccionario (ERROR_CODES / DICTIONARY)
-```
-
-### 📂 Estructura de Directorios
-
-```text
-src/
-├── config/
-│   ├── env.config.js          # Carga y validación estricta de variables de entorno al arranque
-│   └── index.js               # Re-exportación de configuración
-├── constants/
-│   └── index.js               # Constantes inmutables congeladas con Object.freeze
-├── controllers/
-│   ├── delivery.controller.js # Manejador HTTP de entregas (delega errores a next)
-│   ├── mock.controller.js     # Manejador HTTP de mocks y seed (delega errores a next)
-│   ├── order.controller.js    # Manejador HTTP de pedidos (delega errores a next)
-│   ├── product.controller.js  # Manejador HTTP de productos (delega errores a next)
-│   └── user.controller.js     # Manejador HTTP de usuarios (delega errores a next)
-├── middlewares/
-│   ├── errorHandler.js        # Middleware global: transforma errores a respuestas HTTP uniformes
-│   └── notFoundHandler.js     # Captura rutas no existentes y genera RouteNotFoundError
-├── mocks/
-│   ├── delivery.mock.js       # Generador de entregas simuladas
-│   ├── order.mock.js          # Generador de pedidos simulados
-│   └── user.mock.js           # Generador de usuarios simulados con campos reales del modelo
-├── models/
-│   ├── delivery.model.js      # Esquema Mongoose de Entrega
-│   ├── order.model.js         # Esquema Mongoose de Pedido
-│   ├── product.model.js       # Esquema Mongoose de Producto
-│   └── user.model.js          # Esquema Mongoose de Usuario
-├── repositories/
-│   ├── delivery.repository.js # Capa de datos para entregas
-│   ├── order.repository.js    # Capa de datos para pedidos
-│   ├── product.repository.js  # Capa de datos para productos
-│   └── user.repository.js     # Capa de datos para usuarios
-├── routes/
-│   ├── deliveries.js          # Enrutador de entregas
-│   ├── mocks.js               # Enrutador de mocking y seed (/api/mocks)
-│   ├── orders.js              # Enrutador de pedidos
-│   ├── products.js            # Enrutador de productos
-│   └── users.js               # Enrutador de usuarios
-├── services/
-│   ├── delivery.service.js    # Lógica de entregas y validación de drivers
-│   ├── mocks.service.js       # Lógica de mocking y control de inserción
-│   ├── order.service.js       # Lógica de pedidos y cálculo de envíos
-│   ├── product.service.js     # Lógica de productos
-│   └── user.service.js        # Lógica de usuarios y restricciones de roles
-├── utils/
-│   ├── apiResponse.js         # Funciones helper para respuestas y creación de errores
-│   ├── errorDictionary.js     # Diccionario central de códigos y mensajes estándar
-│   └── errors.js              # Jerarquía de clases de errores personalizados del dominio
-└── server.js                  # Inicialización del servidor, rutas y middlewares de errores
+notFoundHandler (404) ──► logger.warning() ──► next(RouteNotFoundError)
+                                                        │
+                                                        ▼
+errorHandler (Global)  ──► logger.warning() [4xx]  ──► errorResponse (JSON uniforme)
+                       ──► logger.error()   [5xx]
+                       ──► logger.fatal()   [crítico]
 ```
 
 ---
 
-## 🛡️ Capa Centralizada de Gestión Profesional de Errores (Pre-entrega Módulo 3)
+## 📝 Sistema de Logging Profesional (Pre-entrega Módulo 4)
 
-La API cuenta con una capa unificada para la gestión de errores que elimina respuestas dispersas en rutas o controladores:
+La API cuenta con un logger centralizado implementado con **Winston** y rotación de archivos mediante **winston-daily-rotate-file**. Se eliminaron todos los `console.log` y `console.error` en favor de registros estructurados con niveles de criticidad.
 
-1. **Detección temprana en la capa de Services:** Los servicios evalúan las condiciones del negocio y lanzan **Errores Personalizados del Dominio** tipados.
-2. **Controladores limpios:** Cada método captura cualquier excepción en su bloque `catch` y la pasa directamente al middleware con `next(error)`. NINGÚN controlador responde errores de forma aislada.
-3. **Middleware Global (`errorHandler.js`):** Punto único de salida de errores hacia el cliente. Identifica errores del dominio, errores nativos de Mongoose (`CastError`, `ValidationError`, clave duplicada `11000`) y errores inesperados, traduciéndolos a una respuesta predecible.
-4. **Middleware de Rutas No Encontradas (`notFoundHandler.js`):** Captura accesos a endpoints inexistentes y deriva a `errorHandler` con código `ROUTE_NOT_FOUND`.
+### 📊 Niveles de Log Configurados
 
-### 📋 Estructura Uniforme de Respuesta de Error
+El sistema utiliza niveles jerárquicos donde a menor valor numérico, mayor es la criticidad:
 
-Todos los errores del sistema responden bajo el siguiente esquema JSON predecible:
+| Nivel | Prioridad | Color | Uso en ShipNow API |
+| :--- | :---: | :---: | :--- |
+| **`fatal`** | 0 | Magenta | Errores críticos que impiden la operación (fallas de conexión inicial a MongoDB o arranque del servidor). |
+| **`error`** | 1 | Rojo | Errores inesperados del servidor (errores 5xx, fallas de persistencia o excepciones no controladas). |
+| **`warning`**| 2 | Amarillo | Advertencias y errores esperados del dominio/negocio (4xx: recurso no encontrado, validaciones, cantidades inválidas). |
+| **`info`** | 3 | Azul | Eventos informativos clave (inicio del servidor, conexión a MongoDB, creación de entidades, seeds). |
+| **`http`** | 4 | Verde | Registro de cada petición HTTP completada con status code y tiempo de respuesta en milisegundos. |
+| **`debug`** | 5 | Cyan | Mensajes detallados para desarrollo y depuración granular. |
 
+---
+
+### 🌐 Comportamiento según el Entorno (`NODE_ENV`)
+
+La configuración del logger se adapta dinámicamente según la variable `NODE_ENV` definida en `.env`:
+
+1. **Entorno Desarrollo (`development`):**
+   - **Consola:** Nivel `debug` (muestra absolutamente todos los niveles: `debug`, `http`, `info`, `warning`, `error`, `fatal`) con colores para facilitar la lectura durante el desarrollo.
+   - **Archivos:** Registra errores y fallas críticas en `logs/error.log` y `logs/errors-%DATE%.log`.
+
+2. **Entorno Producción (`production`):**
+   - **Consola:** Nivel `info` (solo muestra `info`, `warning`, `error` y `fatal`; omite `debug` y `http` para optimizar rendimiento y no sobrecargar la salida).
+   - **Archivos:** Persistencia estricta de errores con rotación.
+
+---
+
+### 💾 Persistencia y Rotación de Archivos de Logs
+
+Los registros se almacenan dentro de la carpeta `/logs`:
+
+1. **`logs/error.log`:** Archivo dedicado exclusivamente a los niveles **`error`** y **`fatal`** (no incluye `info`, `http`, `debug` ni `warning`). Posee rotación por tamaño límite de 5 MB y hasta 5 archivos históricos.
+2. **`logs/errors-%DATE%.log`:** Archivo rotativo diario administrado por `winston-daily-rotate-file`, conservando un historial ordenado de hasta 14 días (`maxFiles: '14d'`).
+
+#### 🔒 Exclusión en Git (`.gitignore`)
+Para evitar que registros internos con información sensible o archivos gigantes se suban al repositorio, el archivo `.gitignore` excluye todos los archivos generados:
+```gitignore
+logs/*
+!logs/.gitkeep
+*.log
+```
+La carpeta `logs/` se mantiene versionada mediante un archivo `.gitkeep`, pero los archivos `.log` y archivos de auditoría nunca se suben a GitHub.
+
+---
+
+### 🧪 Endpoint de Prueba del Logger (`/api/loggerTest`)
+
+Para verificar de forma inmediata el funcionamiento de todos los niveles del logger, se incorporó un endpoint de testing:
+
+```http
+GET /api/loggerTest
+```
+*(También disponible como alias en `GET /loggerTest`)*
+
+#### Salida esperada en Consola:
+```text
+2026-10-24 15:29:37 [debug] Mensaje de prueba - nivel DEBUG
+2026-10-24 15:29:37 [http] GET /api/loggerTest 200 - 5ms
+2026-10-24 15:29:37 [info] Mensaje de prueba - nivel INFO
+2026-10-24 15:29:37 [warning] Mensaje de prueba - nivel WARNING
+2026-10-24 15:29:37 [error] Mensaje de prueba - nivel ERROR
+2026-10-24 15:29:37 [fatal] Mensaje de prueba - nivel FATAL
+```
+
+#### Salida en `logs/error.log` y `logs/errors-YYYY-MM-DD.log`:
+Únicamente se guardan las líneas de niveles `error` y `fatal`:
+```text
+2026-10-24 15:29:37 [error] Mensaje de prueba - nivel ERROR
+2026-10-24 15:29:37 [fatal] Mensaje de prueba - nivel FATAL
+```
+
+#### Respuesta HTTP al Cliente:
+```json
+{
+  "status": "success",
+  "message": "Logs de prueba ejecutados correctamente en todos los niveles (debug, http, info, warning, error, fatal)",
+  "levelsTested": ["debug", "http", "info", "warning", "error", "fatal"]
+}
+```
+
+---
+
+## 🛡️ Capa Centralizada de Gestión Profesional de Errores
+
+Todos los errores del sistema responden bajo un esquema JSON uniforme:
 ```json
 {
   "status": "error",
@@ -111,116 +143,20 @@ Todos los errores del sistema responden bajo el siguiente esquema JSON predecibl
 }
 ```
 
-Si existen detalles adicionales de validación, se incluye opcionalmente el campo `details`.
+- **Errores de negocio (4xx):** Se registran con nivel **`warning`** en el logger (ej. `USER_NOT_FOUND`, `VALIDATION_ERROR`, `ROUTE_NOT_FOUND`, `INVALID_QUANTITY`).
+- **Errores de servidor (5xx):** Se registran con nivel **`error`** en el logger e impactan en los archivos `logs/error.log` y `logs/errors-YYYY-MM-DD.log`.
 
 ---
 
-### 📖 Diccionario de Errores (`src/utils/errorDictionary.js`)
+## 🎭 Módulo de Mocking y Carga de Datos de Prueba (`/api/mocks`)
 
-Define las constantes de códigos (`ERROR_CODES`) y su configuración predeterminada de códigos HTTP y mensajes (`ERROR_DICTIONARY`):
+Genera datos simulados mediante **@faker-js/faker** con campos unificados con el modelo real (`firstName`, `lastName`, `email`, `role`, `password`):
 
-| Código (`code`) | HTTP Status | Mensaje por Defecto | Caso de Uso |
-| :--- | :---: | :--- | :--- |
-| `USER_NOT_FOUND` | 404 | Usuario no encontrado | Búsqueda/actualización/eliminación de usuario inexistente |
-| `PRODUCT_NOT_FOUND` | 404 | Producto no encontrado | Consulta o modificación de producto inexistente |
-| `ORDER_NOT_FOUND` | 404 | Pedido no encontrado | Pedido no hallado por ID |
-| `DELIVERY_NOT_FOUND` | 404 | Entrega no encontrada | Entrega no hallada por ID |
-| `ROUTE_NOT_FOUND` | 404 | Ruta no encontrada | Endpoint o método HTTP no implementado |
-| `VALIDATION_ERROR` | 400 | Faltan datos obligatorios o formato inválido | Faltan campos en body o formato de ID inválido |
-| `INVALID_QUANTITY` | 400 | Cantidad de datos inválida | Parámetro `qty` inválido en el módulo de mocks |
-| `INVALID_USER_ROLE` | 400 | Rol de usuario inválido | Rol desconocido o asignación de driver incorrecta |
-| `INVALID_STATUS` | 400 | Estado o prioridad inválidos | Estado o prioridad fuera de los `enum` permitidos |
-| `CONFLICT_ERROR` | 409 | El recurso ya existe o genera conflicto | Email duplicado, código de producto repetido |
-| `FORBIDDEN_OPERATION` | 403 | Operación no permitida | Intento de registrar usuarios con rol ADMIN desde endpoint público |
-| `DATABASE_ERROR` | 500 | Error al operar con la base de datos | Fallas de conexión o inserción en MongoDB |
-| `INTERNAL_SERVER_ERROR` | 500 | Error interno en el servidor | Errores no contemplados o fallas críticas |
-
----
-
-### 🧱 Clases de Errores Personalizados del Dominio (`src/utils/errors.js`)
-
-Heredan de la clase base `CustomError` que extiende la clase nativa `Error` de JavaScript:
-
-- `UserNotFoundError` (404)
-- `ProductNotFoundError` (404)
-- `OrderNotFoundError` (404)
-- `DeliveryNotFoundError` (404)
-- `RouteNotFoundError` (404)
-- `ValidationError` (400)
-- `InvalidQuantityError` (400)
-- `InvalidRoleError` (400)
-- `InvalidStatusError` (400)
-- `ConflictError` (409)
-- `ForbiddenError` (403)
-- `DatabaseOperationError` (500)
-
----
-
-## 🎭 Módulo de Mocking y Carga de Datos de Prueba (Integrado con Errores Centralizados)
-
-Genera datos simulados mediante **@faker-js/faker** con campos unificados con el modelo real (`firstName`, `lastName`, `email`, `role`, `password`) y validaciones controladas:
-
-### 🔌 Endpoints de Mocking (`/api/mocks`)
-
-| Método | Endpoint | Parámetros | Descripción |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/mocks/users` | `?qty=N` (default: 10, máx: 400) | Devuelve usuarios simulados en memoria con campos reales del modelo |
-| `GET` | `/api/mocks/orders` | `?qty=N` (default: 10, máx: 400) | Devuelve pedidos simulados en memoria |
-| `GET` | `/api/mocks/deliveries` | `?qty=N` (default: 10, máx: 400) | Devuelve entregas simuladas en memoria |
-| `GET` | `/api/mocks/all` | `?qty=N` (default: 10, máx: 400) | Devuelve un conjunto completo simulado en memoria |
-| `POST` | `/api/mocks/seed` | `?qty=N&collection=...` | Inserta datos de prueba en MongoDB respetando relaciones |
-
-### Respuestas de Error Controladas en Mocks:
-
-1. **Cantidad no numérica o decimal (`?qty=abc` o `?qty=2.5`):**
-   ```json
-   {
-     "status": "error",
-     "message": "qty debe ser un número entero válido",
-     "code": "INVALID_QUANTITY"
-   }
-   ```
-2. **Valor negativo (`?qty=-5`):**
-   ```json
-   {
-     "status": "error",
-     "message": "qty no puede ser negativo",
-     "code": "INVALID_QUANTITY"
-   }
-   ```
-3. **Cantidad excesiva (`?qty=450`):**
-   ```json
-   {
-     "status": "error",
-     "message": "qty no puede superar 400",
-     "code": "INVALID_QUANTITY"
-   }
-   ```
-4. **Fallas durante la carga en MongoDB:**
-   Si la base de datos pierde conexión o falla en la inserción, se captura de forma controlada respondiendo con status **500** y código `DATABASE_ERROR`.
-
----
-
-## 🔒 Constantes Inmutables del Dominio
-
-Todas las constantes se encuentran centralizadas en `src/constants/index.js` y congeladas con `Object.freeze`:
-
-- **Roles de Usuario (`USER_ROLES`):** `ADMIN`, `CUSTOMER`, `DRIVER`, `STORE`, `USER`.
-- **Estados de Pedido (`ORDER_STATUS`):** `CREATED`, `ASSIGNED`, `PICKED_UP`, `IN_TRANSIT`, `DELIVERED`, `CANCELLED`.
-- **Estados de Entrega (`DELIVERY_STATUS`):** `PENDING`, `ASSIGNED`, `IN_TRANSIT`, `DELIVERED`.
-- **Prioridades (`DELIVERY_PRIORITY`):** `LOW`, `NORMAL`, `HIGH`.
-- **Estados de Producto (`PRODUCT_STATUS`):** `AVAILABLE`, `OUT_OF_STOCK`.
-- **Códigos HTTP (`HTTP_STATUS`):** `OK`, `CREATED`, `BAD_REQUEST`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_SERVER_ERROR`.
-
----
-
-## ⚙️ Configuración y Variables de Entorno
-
-La configuración está centralizada en `src/config/env.config.js` con **validación estricta al arranque**. Si falta alguna variable obligatoria (`PORT`, `MONGODB_URI`, `NODE_ENV`), la aplicación aborta inmediatamente con un error descriptivo:
-
-```text
-[ERROR DE CONFIGURACIÓN] Faltan variables de entorno críticas requeridas: MONGODB_URI. La aplicación no puede iniciar sin esta configuración.
-```
+- `GET /api/mocks/users?qty=N` — Mocks de usuarios en memoria (default: 10, máx: 400).
+- `GET /api/mocks/orders?qty=N` — Mocks de pedidos en memoria.
+- `GET /api/mocks/deliveries?qty=N` — Mocks de entregas en memoria.
+- `GET /api/mocks/all?qty=N` — Conjunto completo simulado en memoria.
+- `POST /api/mocks/seed?qty=N&collection=...` — Carga en MongoDB (`usuarios`, `pedidos`, `entregas`, `all`).
 
 ---
 
@@ -256,6 +192,42 @@ La configuración está centralizada en `src/config/env.config.js` con **validac
    ```bash
    npm start
    ```
+
+---
+
+## 📡 Tabla General de Endpoints
+
+### Health & Monitoreo
+- `GET /api/health` — Estado general de la API, timestamp y entorno.
+- `GET /api/loggerTest` — Endpoint de prueba del logger en todos los niveles.
+
+### Usuarios (`/api/users`)
+- `GET /api/users` — Listar usuarios.
+- `GET /api/users/:id` — Obtener usuario por ID.
+- `POST /api/users` — Crear usuario.
+- `PUT /api/users/:id` — Actualizar usuario.
+- `DELETE /api/users/:id` — Eliminar usuario.
+
+### Pedidos (`/api/orders`)
+- `GET /api/orders` — Listar pedidos con clientes poblados.
+- `GET /api/orders/:id` — Obtener pedido por ID.
+- `POST /api/orders` — Crear pedido (calcula envío y total).
+- `PUT /api/orders/:id` — Actualizar pedido.
+- `DELETE /api/orders/:id` — Eliminar pedido.
+
+### Entregas (`/api/deliveries`)
+- `GET /api/deliveries` — Listar entregas con pedidos y repartidores.
+- `GET /api/deliveries/:id` — Obtener entrega por ID.
+- `POST /api/deliveries` — Crear entrega vinculada a pedido y repartidor.
+- `PUT /api/deliveries/:id` — Actualizar entrega.
+- `DELETE /api/deliveries/:id` — Eliminar entrega.
+
+### Productos (`/api/products`)
+- `GET /api/products` — Listar productos disponibles.
+- `GET /api/products/:id` — Obtener producto por ID.
+- `POST /api/products` — Crear producto.
+- `PUT /api/products/:id` — Actualizar producto.
+- `DELETE /api/products/:id` — Eliminar producto.
 
 ---
 
