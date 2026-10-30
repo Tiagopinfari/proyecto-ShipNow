@@ -1,8 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
+import swaggerUi from 'swagger-ui-express';
 import config from './config/env.config.js';
 import logger from './config/logger.js';
+import { swaggerSpec, swaggerUiOptions } from './config/swagger.js';
 import httpLogger from './middlewares/httpLogger.js';
 import usersRouter from './routes/users.js';
 import productsRouter from './routes/products.js';
@@ -21,6 +23,13 @@ app.use(express.urlencoded({ extended: true }));
 
 // Middleware de registro de peticiones HTTP
 app.use(httpLogger);
+
+// Documentación interactiva con Swagger / OpenAPI
+app.get('/api/docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 
 // Rutas de la API
 app.use('/api/users', usersRouter);
@@ -62,6 +71,7 @@ mongoose.connect(config.MONGODB_URI)
     logger.info('Conexión a MongoDB establecida exitosamente');
     app.listen(config.PORT, () => {
       logger.info(`Servidor ShipNow escuchando en el puerto ${config.PORT} (modo ${config.NODE_ENV})`);
+      logger.info(`Documentación Swagger UI disponible en http://localhost:${config.PORT}/api/docs`);
     });
   })
   .catch((error) => {

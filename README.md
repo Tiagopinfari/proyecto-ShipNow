@@ -1,24 +1,26 @@
 # ShipNow API — Backend 3 (Coderhouse)
 
-API RESTful profesional de logística para **ShipNow**, desarrollada bajo arquitectura en 3 capas (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque, módulo de mocking con Faker, capa centralizada de manejo de errores y un **sistema profesional de logging y monitoreo básico con Winston** (Pre-entrega Módulo 4).
+API RESTful profesional de logística para **ShipNow**, desarrollada bajo arquitectura en 3 capas (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque, módulo de mocking con Faker, capa centralizada de manejo de errores, sistema profesional de logging con Winston y **documentación interactiva completa con Swagger / OpenAPI 3.0** (Pre-entrega Módulo 5).
 
 ---
 
 ## 🏛️ Arquitectura del Sistema
 
-El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad, independencia de la base de datos y observabilidad completa mediante logs:
+El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad, independencia de la base de datos, observabilidad completa y documentación desacoplada de las rutas:
 
 ```text
-[ Cliente HTTP ]
+[ Cliente HTTP / Navegador ]
+       │
+       ├───► GET /api/docs      ──► [ Swagger UI ] (src/config/swagger.js + src/docs/**/*.yaml)
        │
        ▼
  [ httpLogger Middleware ] ──► Registra peticiones HTTP con Winston (método, URL, status, duración)
        │
        ▼
- [ Router ]                ──► Enrutamiento declarativo (asocia verbo/path al Controller)
+ [ Router ]                ──► Enrutamiento declarativo limpio (sin comentarios Swagger mezclados)
        │
        ▼
-[ Controller ]             ──► Manejo de req/res. Delega errores en next(error) sin emitir logs duplicados.
+[ Controller ]             ──► Manejo de req/res. Delega errores en next(error).
        │
        ▼
  [ Service ]               ──► Reglas de negocio. Emite logs informativos y advertencias de dominio.
@@ -44,13 +46,55 @@ errorHandler (Global)  ──► logger.warning() [4xx]  ──► errorResponse
 
 ---
 
+## 📖 Documentación Interactiva con Swagger / OpenAPI (Pre-entrega Módulo 5)
+
+La API cuenta con documentación interactiva construida con **OpenAPI 3.0.3**, utilizando `swagger-jsdoc` y `swagger-ui-express`.
+Para mantener las rutas limpias y respetar la separación de responsabilidades, toda la configuración se centraliza en `src/config/swagger.js` y las especificaciones YAML se organizan modularmente en `src/docs/`.
+
+### 🔗 Rutas de Acceso a la Documentación
+
+Una vez iniciado el servidor (por defecto en el puerto `3000`), podés acceder a:
+
+- **Interfaz Interactiva (Swagger UI):** [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
+- **Especificación OpenAPI en formato JSON:** [http://localhost:3000/api/docs.json](http://localhost:3000/api/docs.json)
+
+### 🗂️ Módulos Documentados (Tags)
+
+La documentación está organizada en los siguientes grupos funcionales:
+
+| Tag | Archivos YAML | Descripción y Alcance |
+| :--- | :--- | :--- |
+| **`Users`** | `src/docs/paths/users.yaml` | ABM completo de usuarios (`GET`, `POST`, `PUT`, `DELETE`), validación de roles e impedimento de creación directa de `admin`. |
+| **`Orders`** | `src/docs/paths/orders.yaml` | Gestión de pedidos con validación de existencia del cliente, ítems obligatorios, cálculo automático de costo de envío y estados/prioridades. |
+| **`Deliveries`** | `src/docs/paths/deliveries.yaml` | Gestión de entregas logísticas vinculadas a pedidos existentes y validación de rol `driver`/`repartidor`. |
+| **`Products`** | `src/docs/paths/products.yaml` | Catálogo de productos, filtro por disponibilidad, control de stock y cotización de envío (`/shipping-cost`). |
+| **`Mocks`** | `src/docs/paths/mocks.yaml` | Generación en memoria (`/users`, `/orders`, `/deliveries`, `/all`) e inserción controlada en MongoDB (`POST /api/mocks/seed`). |
+| **`Logger`** | `src/docs/paths/logger.yaml` | Endpoint `GET /api/loggerTest`, documentado explícitamente como **herramienta interna de validación técnica** (no es una funcionalidad de negocio). |
+
+### 🧩 Schemas Reutilizables (`src/docs/schemas/components.yaml`)
+
+Todos los endpoints referencian esquemas centralizados en `#/components/schemas/`:
+- **Entidades principales:** `User`, `Order`, `OrderItem`, `Delivery`, `Product`, `UserDocument`.
+- **DTOs de entrada (Request Bodies):** `UserInput`, `UserUpdateInput`, `OrderInput`, `OrderUpdateInput`, `DeliveryInput`, `DeliveryUpdateInput`, `ProductInput`, `SeedInput`.
+- **Respuestas estandarizadas:** `ErrorResponse`, `SuccessResponse`, `DeleteMessageResponse`, `SeedResponse`, `LoggerTestResponse`.
+
+### 💡 Aclaraciones para Probar los Endpoints desde Swagger UI ("Try it out")
+
+1. **Poblar datos rápidamente con Seed:**
+   - Dirigite al tag **`Mocks`** → `POST /api/mocks/seed`, presioná **"Try it out"** y ejecutalo con `collection: "all"` y `qty: 5`. Esto creará clientes, repartidores, pedidos y entregas reales en MongoDB.
+2. **Probar creación de Pedidos (`POST /api/orders`) y Entregas (`POST /api/deliveries`):**
+   - Primero ejecutá `GET /api/users` para copiar un `_id` real de un usuario con rol `customer` (para crear un pedido) o con rol `driver` (para asignar una entrega).
+3. **Verificar errores documentados:**
+   - Podés probar enviar `qty=-5` o `qty=500` en `GET /api/mocks/users` para observar la respuesta `400 Bad Request` con código `INVALID_QUANTITY`.
+   - Podés enviar un estado inexistente en `POST /api/orders` o `POST /api/deliveries` para verificar el error `400 Bad Request` con código `INVALID_STATUS`.
+
+---
+
 ## 📝 Sistema de Logging Profesional (Pre-entrega Módulo 4)
 
 La API cuenta con un logger centralizado implementado con **Winston** y rotación de archivos mediante **winston-daily-rotate-file**. Se eliminaron todos los `console.log` y `console.error` en favor de registros estructurados con niveles de criticidad.
 
 ### 📊 Niveles de Log Configurados
-
-El sistema utiliza niveles jerárquicos donde a menor valor numérico, mayor es la criticidad:
 
 | Nivel | Prioridad | Color | Uso en ShipNow API |
 | :--- | :---: | :---: | :--- |
@@ -61,80 +105,16 @@ El sistema utiliza niveles jerárquicos donde a menor valor numérico, mayor es 
 | **`http`** | 4 | Verde | Registro de cada petición HTTP completada con status code y tiempo de respuesta en milisegundos. |
 | **`debug`** | 5 | Cyan | Mensajes detallados para desarrollo y depuración granular. |
 
----
-
 ### 🌐 Comportamiento según el Entorno (`NODE_ENV`)
 
-La configuración del logger se adapta dinámicamente según la variable `NODE_ENV` definida en `.env`:
-
-1. **Entorno Desarrollo (`development`):**
-   - **Consola:** Nivel `debug` (muestra absolutamente todos los niveles: `debug`, `http`, `info`, `warning`, `error`, `fatal`) con colores para facilitar la lectura durante el desarrollo.
-   - **Archivos:** Registra errores y fallas críticas en `logs/error.log` y `logs/errors-%DATE%.log`.
-
-2. **Entorno Producción (`production`):**
-   - **Consola:** Nivel `info` (solo muestra `info`, `warning`, `error` y `fatal`; omite `debug` y `http` para optimizar rendimiento y no sobrecargar la salida).
-   - **Archivos:** Persistencia estricta de errores con rotación.
+1. **Entorno Desarrollo (`development`):** Consola en nivel `debug` (muestra todos los niveles con colores) y persistencia de `error` y `fatal` en archivos.
+2. **Entorno Producción (`production`):** Consola en nivel `info` (omite `debug` y `http`) y persistencia de `error` y `fatal` con rotación diaria en `logs/error.log` y `logs/errors-%DATE%.log`.
 
 ---
 
-### 💾 Persistencia y Rotación de Archivos de Logs
+## 🛡️ Capa Centralizada de Gestión Profesional de Errores (Pre-entrega Módulo 3)
 
-Los registros se almacenan dentro de la carpeta `/logs`:
-
-1. **`logs/error.log`:** Archivo dedicado exclusivamente a los niveles **`error`** y **`fatal`** (no incluye `info`, `http`, `debug` ni `warning`). Posee rotación por tamaño límite de 5 MB y hasta 5 archivos históricos.
-2. **`logs/errors-%DATE%.log`:** Archivo rotativo diario administrado por `winston-daily-rotate-file`, conservando un historial ordenado de hasta 14 días (`maxFiles: '14d'`).
-
-#### 🔒 Exclusión en Git (`.gitignore`)
-Para evitar que registros internos con información sensible o archivos gigantes se suban al repositorio, el archivo `.gitignore` excluye todos los archivos generados:
-```gitignore
-logs/*
-!logs/.gitkeep
-*.log
-```
-La carpeta `logs/` se mantiene versionada mediante un archivo `.gitkeep`, pero los archivos `.log` y archivos de auditoría nunca se suben a GitHub.
-
----
-
-### 🧪 Endpoint de Prueba del Logger (`/api/loggerTest`)
-
-Para verificar de forma inmediata el funcionamiento de todos los niveles del logger, se incorporó un endpoint de testing:
-
-```http
-GET /api/loggerTest
-```
-*(También disponible como alias en `GET /loggerTest`)*
-
-#### Salida esperada en Consola:
-```text
-2026-10-24 15:29:37 [debug] Mensaje de prueba - nivel DEBUG
-2026-10-24 15:29:37 [http] GET /api/loggerTest 200 - 5ms
-2026-10-24 15:29:37 [info] Mensaje de prueba - nivel INFO
-2026-10-24 15:29:37 [warning] Mensaje de prueba - nivel WARNING
-2026-10-24 15:29:37 [error] Mensaje de prueba - nivel ERROR
-2026-10-24 15:29:37 [fatal] Mensaje de prueba - nivel FATAL
-```
-
-#### Salida en `logs/error.log` y `logs/errors-YYYY-MM-DD.log`:
-Únicamente se guardan las líneas de niveles `error` y `fatal`:
-```text
-2026-10-24 15:29:37 [error] Mensaje de prueba - nivel ERROR
-2026-10-24 15:29:37 [fatal] Mensaje de prueba - nivel FATAL
-```
-
-#### Respuesta HTTP al Cliente:
-```json
-{
-  "status": "success",
-  "message": "Logs de prueba ejecutados correctamente en todos los niveles (debug, http, info, warning, error, fatal)",
-  "levelsTested": ["debug", "http", "info", "warning", "error", "fatal"]
-}
-```
-
----
-
-## 🛡️ Capa Centralizada de Gestión Profesional de Errores
-
-Todos los errores del sistema responden bajo un esquema JSON uniforme:
+Todos los errores del sistema responden bajo un esquema JSON uniforme documentado en `ErrorResponse`:
 ```json
 {
   "status": "error",
@@ -143,30 +123,34 @@ Todos los errores del sistema responden bajo un esquema JSON uniforme:
 }
 ```
 
-- **Errores de negocio (4xx):** Se registran con nivel **`warning`** en el logger (ej. `USER_NOT_FOUND`, `VALIDATION_ERROR`, `ROUTE_NOT_FOUND`, `INVALID_QUANTITY`).
-- **Errores de servidor (5xx):** Se registran con nivel **`error`** en el logger e impactan en los archivos `logs/error.log` y `logs/errors-YYYY-MM-DD.log`.
+Códigos del diccionario de errores (`src/utils/errorDictionary.js`):
+- `VALIDATION_ERROR` (400), `INVALID_QUANTITY` (400), `INVALID_USER_ROLE` (400), `INVALID_STATUS` (400)
+- `FORBIDDEN_OPERATION` (403)
+- `ROUTE_NOT_FOUND` (404), `USER_NOT_FOUND` (404), `PRODUCT_NOT_FOUND` (404), `ORDER_NOT_FOUND` (404), `DELIVERY_NOT_FOUND` (404)
+- `CONFLICT_ERROR` (409)
+- `INTERNAL_SERVER_ERROR` (500), `DATABASE_ERROR` (500)
 
 ---
 
 ## 🎭 Módulo de Mocking y Carga de Datos de Prueba (`/api/mocks`)
 
-Genera datos simulados mediante **@faker-js/faker** con campos unificados con el modelo real (`firstName`, `lastName`, `email`, `role`, `password`):
+Genera datos simulados mediante **@faker-js/faker** respetando los modelos y constantes del sistema:
 
 - `GET /api/mocks/users?qty=N` — Mocks de usuarios en memoria (default: 10, máx: 400).
 - `GET /api/mocks/orders?qty=N` — Mocks de pedidos en memoria.
 - `GET /api/mocks/deliveries?qty=N` — Mocks de entregas en memoria.
 - `GET /api/mocks/all?qty=N` — Conjunto completo simulado en memoria.
-- `POST /api/mocks/seed?qty=N&collection=...` — Carga en MongoDB (`usuarios`, `pedidos`, `entregas`, `all`).
+- `POST /api/mocks/seed?qty=N&collection=...` — Carga controlada en MongoDB (`usuarios`, `pedidos`, `entregas`, `all`).
 
 ---
 
-## 🚀 Instalación y Puesta en Marcha
+## 🚀 Cómo Levantar el Servidor
 
 ### Prerrequisitos
 - **Node.js** (v18+)
-- **MongoDB** local o Atlas
+- **MongoDB** ejecutándose localmente o URI de MongoDB Atlas
 
-### Pasos
+### Pasos de Instalación y Ejecución
 1. **Clonar el repositorio:**
    ```bash
    git clone https://github.com/Tiagopinfari/proyecto-ShipNow.git
@@ -178,56 +162,28 @@ Genera datos simulados mediante **@faker-js/faker** con campos unificados con el
    npm install
    ```
 
-3. **Configurar el archivo de entorno:**
-   ```bash
-   cp .env.example .env
+3. **Configurar variables de entorno:**
+   Crear un archivo `.env` en la raíz (podés basarte en `.env.example`):
+   ```env
+   PORT=3000
+   NODE_ENV=development
+   MONGODB_URI=mongodb://127.0.0.1:27017/shipnow
+   JWT_SECRET=tu_clave_secreta_segura
+   SHIPPING_API_KEY=shipnow_api_key_dev
    ```
 
-4. **Iniciar en modo desarrollo:**
+4. **Levantar el servidor en modo desarrollo:**
    ```bash
    npm run dev
    ```
 
-5. **Iniciar en modo producción:**
+5. **Levantar el servidor en modo producción:**
    ```bash
    npm start
    ```
 
----
-
-## 📡 Tabla General de Endpoints
-
-### Health & Monitoreo
-- `GET /api/health` — Estado general de la API, timestamp y entorno.
-- `GET /api/loggerTest` — Endpoint de prueba del logger en todos los niveles.
-
-### Usuarios (`/api/users`)
-- `GET /api/users` — Listar usuarios.
-- `GET /api/users/:id` — Obtener usuario por ID.
-- `POST /api/users` — Crear usuario.
-- `PUT /api/users/:id` — Actualizar usuario.
-- `DELETE /api/users/:id` — Eliminar usuario.
-
-### Pedidos (`/api/orders`)
-- `GET /api/orders` — Listar pedidos con clientes poblados.
-- `GET /api/orders/:id` — Obtener pedido por ID.
-- `POST /api/orders` — Crear pedido (calcula envío y total).
-- `PUT /api/orders/:id` — Actualizar pedido.
-- `DELETE /api/orders/:id` — Eliminar pedido.
-
-### Entregas (`/api/deliveries`)
-- `GET /api/deliveries` — Listar entregas con pedidos y repartidores.
-- `GET /api/deliveries/:id` — Obtener entrega por ID.
-- `POST /api/deliveries` — Crear entrega vinculada a pedido y repartidor.
-- `PUT /api/deliveries/:id` — Actualizar entrega.
-- `DELETE /api/deliveries/:id` — Eliminar entrega.
-
-### Productos (`/api/products`)
-- `GET /api/products` — Listar productos disponibles.
-- `GET /api/products/:id` — Obtener producto por ID.
-- `POST /api/products` — Crear producto.
-- `PUT /api/products/:id` — Actualizar producto.
-- `DELETE /api/products/:id` — Eliminar producto.
+6. **Abrir Swagger UI en el navegador:**
+   Visitar `http://localhost:3000/api/docs` para explorar y probar interactivamente todos los endpoints.
 
 ---
 
