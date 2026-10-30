@@ -1,0 +1,236 @@
+paths:
+  /api/users:
+    get:
+      summary: Listar todos los usuarios
+      description: Obtiene el listado completo de usuarios registrados en la base de datos.
+      tags:
+        - Users
+      responses:
+        '200':
+          description: Lista de usuarios obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Error interno en el servidor"
+                code: "INTERNAL_SERVER_ERROR"
+
+    post:
+      summary: Crear un nuevo usuario
+      description: Registra un nuevo usuario validando campos obligatorios, unicidad de email y que el rol sea válido (no permite crear usuarios con rol 'admin' por esta vía).
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Datos faltantes o rol de usuario inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                DatosFaltantes:
+                  summary: Campos obligatorios faltantes
+                  value:
+                    status: "error"
+                    message: "Faltan campos obligatorios para registrar el usuario (firstName, lastName, email, password)"
+                    code: "VALIDATION_ERROR"
+                RolInvalido:
+                  summary: Rol no permitido en las constantes del sistema
+                  value:
+                    status: "error"
+                    message: "Rol de usuario inválido"
+                    code: "INVALID_USER_ROLE"
+        '403':
+          description: Intento de creación de rol administrador restringido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "No se puede crear un admin desde este endpoint"
+                code: "FORBIDDEN_OPERATION"
+        '409':
+          description: El correo electrónico ya se encuentra registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "El email ya se encuentra registrado"
+                code: "CONFLICT_ERROR"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/{id}:
+    get:
+      summary: Obtener un usuario por ID
+      description: Busca y devuelve un usuario específico por su ObjectId de MongoDB.
+      tags:
+        - Users
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único del usuario en MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c01"
+      responses:
+        '200':
+          description: Usuario encontrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Formato de ID inválido (CastError)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "ID inválido o con formato incorrecto"
+                code: "VALIDATION_ERROR"
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Usuario no encontrado"
+                code: "USER_NOT_FOUND"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Actualizar un usuario por ID
+      description: Modifica los datos de un usuario existente identificado por su ID.
+      tags:
+        - Users
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único del usuario a actualizar
+          example: "665f1a2b3c4d5e6f7a8b9c01"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateInput'
+      responses:
+        '200':
+          description: Usuario actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: ID con formato inválido o datos de actualización incorrectos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "ID inválido o con formato incorrecto"
+                code: "VALIDATION_ERROR"
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Usuario no encontrado"
+                code: "USER_NOT_FOUND"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Eliminar un usuario por ID
+      description: Elimina físicamente un usuario de la base de datos según su ID.
+      tags:
+        - Users
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único del usuario a eliminar
+          example: "665f1a2b3c4d5e6f7a8b9c01"
+      responses:
+        '200':
+          description: Usuario eliminado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteMessageResponse'
+              example:
+                message: "Usuario eliminado"
+        '400':
+          description: ID inválido o con formato incorrecto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Usuario no encontrado"
+                code: "USER_NOT_FOUND"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

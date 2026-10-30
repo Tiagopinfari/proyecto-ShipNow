@@ -1,0 +1,239 @@
+paths:
+  /api/products:
+    get:
+      summary: Listar productos
+      description: Obtiene los productos disponibles en stock (o todos los productos si se envía el query param `all=true`).
+      tags:
+        - Products
+      parameters:
+        - in: query
+          name: all
+          required: false
+          schema:
+            type: boolean
+          description: Si es true, incluye también los productos agotados (out_of_stock)
+          example: false
+      responses:
+        '200':
+          description: Lista de productos obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Crear un nuevo producto
+      description: Registra un nuevo producto validando código único, precio no negativo y asignando automáticamente el estado según su stock.
+      tags:
+        - Products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Producto creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Datos obligatorios faltantes o valores numéricos negativos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Faltan campos obligatorios para crear el producto (title, code, price)"
+                code: "VALIDATION_ERROR"
+        '409':
+          description: El código del producto ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Ya existe un producto con el código especificado"
+                code: "CONFLICT_ERROR"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/products/{id}:
+    get:
+      summary: Obtener un producto por ID
+      description: Devuelve el detalle de un producto específico por su ObjectId.
+      tags:
+        - Products
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único del producto
+          example: "665f1a2b3c4d5e6f7a8b9c30"
+      responses:
+        '200':
+          description: Producto encontrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: ID inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Producto no encontrado"
+                code: "PRODUCT_NOT_FOUND"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Actualizar un producto por ID
+      description: Actualiza los datos o stock de un producto existente recalibrando su estado si cambia el stock.
+      tags:
+        - Products
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID del producto a actualizar
+          example: "665f1a2b3c4d5e6f7a8b9c30"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '200':
+          description: Producto actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Stock negativo o ID inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Producto no encontrado"
+                code: "PRODUCT_NOT_FOUND"
+
+    delete:
+      summary: Eliminar un producto por ID
+      description: Elimina un producto de la base de datos.
+      tags:
+        - Products
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID del producto a eliminar
+          example: "665f1a2b3c4d5e6f7a8b9c30"
+      responses:
+        '200':
+          description: Producto eliminado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteMessageResponse'
+              example:
+                message: "Producto eliminado"
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Producto no encontrado"
+                code: "PRODUCT_NOT_FOUND"
+
+  /api/products/{id}/shipping-cost:
+    get:
+      summary: Cotizar costo de envío de un producto
+      description: Calcula el costo de envío estimado para un producto según su valor declarado y el entorno de ejecución.
+      tags:
+        - Products
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID del producto a cotizar
+          example: "665f1a2b3c4d5e6f7a8b9c30"
+      responses:
+        '200':
+          description: Cotización calculada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product:
+                    type: string
+                    example: "665f1a2b3c4d5e6f7a8b9c30"
+                  declaredValue:
+                    type: number
+                    example: 45000
+                  shippingCost:
+                    type: number
+                    example: 10
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Falta API Key de envíos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

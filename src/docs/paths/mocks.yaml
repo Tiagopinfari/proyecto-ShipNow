@@ -1,0 +1,269 @@
+paths:
+  /api/mocks/users:
+    get:
+      summary: Generar usuarios simulados en memoria
+      description: |
+        Genera usuarios de prueba utilizando **@faker-js/faker** con roles coherentes (`customer` y `driver`) **sin guardarlos en MongoDB**.
+        Valida que el parámetro `qty` sea un número entero entre 0 y 400 (por defecto 10).
+      tags:
+        - Mocks
+      parameters:
+        - in: query
+          name: qty
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 0
+            maximum: 400
+          description: Cantidad de usuarios simulados a generar (entre 0 y 400)
+          example: 5
+      responses:
+        '200':
+          description: Lista de usuarios simulados generada en memoria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '400':
+          description: Cantidad inválida (valor negativo, no numérico o superior a 400)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                CantidadNegativa:
+                  summary: Cantidad negativa enviada por query
+                  value:
+                    status: "error"
+                    message: "qty no puede ser negativo"
+                    code: "INVALID_QUANTITY"
+                CantidadNoEntera:
+                  summary: Valor alfanumérico o decimal
+                  value:
+                    status: "error"
+                    message: "qty debe ser un número entero válido"
+                    code: "INVALID_QUANTITY"
+                CantidadExcedida:
+                  summary: Supera el límite máximo de 400 registros
+                  value:
+                    status: "error"
+                    message: "qty no puede superar 400"
+                    code: "INVALID_QUANTITY"
+
+  /api/mocks/orders:
+    get:
+      summary: Generar pedidos simulados en memoria
+      description: Genera pedidos de prueba en memoria con ítems, totales calculados, estados y prioridades válidas **sin persistirlos en la base de datos**.
+      tags:
+        - Mocks
+      parameters:
+        - in: query
+          name: qty
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 0
+            maximum: 400
+          description: Cantidad de pedidos simulados a generar (entre 0 y 400)
+          example: 5
+      responses:
+        '200':
+          description: Lista de pedidos simulados generada en memoria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+        '400':
+          description: Cantidad inválida (negativa, no entera o mayor a 400)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "qty debe ser un número entero válido"
+                code: "INVALID_QUANTITY"
+
+  /api/mocks/deliveries:
+    get:
+      summary: Generar entregas simuladas en memoria
+      description: Genera entregas logísticas simuladas en memoria asociadas a pedidos y repartidores **sin guardarlas en MongoDB**.
+      tags:
+        - Mocks
+      parameters:
+        - in: query
+          name: qty
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 0
+            maximum: 400
+          description: Cantidad de entregas simuladas a generar (entre 0 y 400)
+          example: 5
+      responses:
+        '200':
+          description: Lista de entregas simuladas generada en memoria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Delivery'
+        '400':
+          description: Cantidad inválida (negativa, no entera o mayor a 400)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "qty no puede ser negativo"
+                code: "INVALID_QUANTITY"
+
+  /api/mocks/all:
+    get:
+      summary: Generar lote completo de datos simulados en memoria
+      description: Devuelve un objeto con usuarios (clientes y repartidores), pedidos y entregas simuladas en memoria sin impactar la base de datos.
+      tags:
+        - Mocks
+      parameters:
+        - in: query
+          name: qty
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 0
+            maximum: 400
+          description: Cantidad base de registros a simular
+          example: 5
+      responses:
+        '200':
+          description: Lote integral de datos simulados generado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pedidos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  entregas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Delivery'
+        '400':
+          description: Cantidad inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/mocks/seed:
+    post:
+      summary: Insertar datos de prueba en MongoDB (Seed controlado)
+      description: |
+        Genera e inserta registros de prueba directamente en **MongoDB** manteniendo la integridad referencial entre colecciones (`usuarios`, `pedidos`, `entregas` o `all`).
+        Acepta los parámetros `qty` y `collection` tanto por **query params** como en el **body JSON**.
+      tags:
+        - Mocks
+      parameters:
+        - in: query
+          name: qty
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 400
+          description: Cantidad de registros a insertar en MongoDB (debe ser entre 1 y 400)
+          example: 10
+        - in: query
+          name: collection
+          required: false
+          schema:
+            type: string
+            enum: [usuarios, users, pedidos, orders, entregas, deliveries, all, completo]
+            default: usuarios
+          description: Colección destino a poblar
+          example: "usuarios"
+      requestBody:
+        required: false
+        description: Cuerpo opcional con la cantidad y colección a poblar (alternativa a los query params)
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeedInput'
+            examples:
+              SeedUsuarios:
+                summary: Insertar 10 usuarios de prueba
+                value:
+                  qty: 10
+                  collection: "usuarios"
+              SeedCompleto:
+                summary: Insertar flujo relacional completo (clientes, repartidores, pedidos y entregas)
+                value:
+                  qty: 5
+                  collection: "all"
+      responses:
+        '201':
+          description: Datos de prueba insertados exitosamente en MongoDB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeedResponse'
+              examples:
+                RespuestaUsuarios:
+                  summary: Inserción en colección usuarios
+                  value:
+                    insertados: 10
+                    coleccion: "usuarios"
+                RespuestaCompleta:
+                  summary: Inserción en colección all/completo
+                  value:
+                    insertados:
+                      usuarios: 8
+                      pedidos: 5
+                      entregas: 5
+                    coleccion: "completo"
+        '400':
+          description: Cantidad inválida (0, negativa, no entera o > 400) o nombre de colección inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                CantidadCero:
+                  summary: Cantidad igual a cero en seed
+                  value:
+                    status: "error"
+                    message: "qty debe ser mayor a 0 para realizar la carga de datos"
+                    code: "INVALID_QUANTITY"
+                ColeccionInvalida:
+                  summary: Colección no soportada
+                  value:
+                    status: "error"
+                    message: "Colección inválida: facturas. Opciones válidas: usuarios, pedidos, entregas, all"
+                    code: "VALIDATION_ERROR"
+        '500':
+          description: Error durante la persistencia en MongoDB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Error al insertar datos en MongoDB"
+                code: "DATABASE_ERROR"

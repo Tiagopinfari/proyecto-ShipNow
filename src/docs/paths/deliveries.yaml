@@ -1,0 +1,226 @@
+paths:
+  /api/deliveries:
+    get:
+      summary: Listar todas las entregas
+      description: Obtiene el listado completo de entregas logísticas con sus referencias a pedidos y repartidores.
+      tags:
+        - Deliveries
+      responses:
+        '200':
+          description: Lista de entregas obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Delivery'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Crear una nueva entrega
+      description: |
+        Registra una entrega asociada a un pedido existente.
+        Si se especifica un `driver`, verifica que el usuario exista y que posea el rol `driver` o `repartidor`.
+        También valida que `status` y `priority` correspondan a valores permitidos.
+      tags:
+        - Deliveries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryInput'
+      responses:
+        '201':
+          description: Entrega creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delivery'
+        '400':
+          description: Rol de repartidor inválido o estado/prioridad de entrega no permitidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                RolInvalido:
+                  summary: El usuario asignado no tiene rol de repartidor
+                  value:
+                    status: "error"
+                    message: "El usuario especificado no posee rol de repartidor/driver"
+                    code: "INVALID_USER_ROLE"
+                EstadoInvalido:
+                  summary: Estado o prioridad de entrega inválido
+                  value:
+                    status: "error"
+                    message: "Estado de entrega inválido"
+                    code: "INVALID_STATUS"
+        '404':
+          description: Pedido o repartidor inexistente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                PedidoNoEncontrado:
+                  summary: El pedido indicado no existe
+                  value:
+                    status: "error"
+                    message: "El pedido especificado no existe"
+                    code: "ORDER_NOT_FOUND"
+                RepartidorNoEncontrado:
+                  summary: El repartidor indicado no existe
+                  value:
+                    status: "error"
+                    message: "El repartidor especificado no existe"
+                    code: "USER_NOT_FOUND"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/deliveries/{id}:
+    get:
+      summary: Obtener una entrega por ID
+      description: Devuelve los detalles de una entrega específica según su ID de MongoDB.
+      tags:
+        - Deliveries
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único de la entrega
+          example: "665f1a2b3c4d5e6f7a8b9c20"
+      responses:
+        '200':
+          description: Entrega encontrada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delivery'
+        '400':
+          description: ID inválido o con formato incorrecto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Entrega no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Entrega no encontrada"
+                code: "DELIVERY_NOT_FOUND"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Actualizar una entrega por ID
+      description: Modifica el estado, prioridad o repartidor asignado de una entrega existente.
+      tags:
+        - Deliveries
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único de la entrega a actualizar
+          example: "665f1a2b3c4d5e6f7a8b9c20"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryUpdateInput'
+      responses:
+        '200':
+          description: Entrega actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delivery'
+        '400':
+          description: ID inválido o datos de actualización incorrectos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Entrega no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Entrega no encontrada"
+                code: "DELIVERY_NOT_FOUND"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Eliminar una entrega por ID
+      description: Elimina un registro de entrega de la base de datos según su ID.
+      tags:
+        - Deliveries
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único de la entrega a eliminar
+          example: "665f1a2b3c4d5e6f7a8b9c20"
+      responses:
+        '200':
+          description: Entrega eliminada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteMessageResponse'
+              example:
+                message: "Entrega eliminada"
+        '400':
+          description: ID inválido o con formato incorrecto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Entrega no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Entrega no encontrada"
+                code: "DELIVERY_NOT_FOUND"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
