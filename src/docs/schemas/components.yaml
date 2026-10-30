@@ -1,0 +1,529 @@
+components:
+  schemas:
+    UserDocument:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nombre o tipo del documento adjunto
+          example: "driver_license"
+        reference:
+          type: string
+          description: Ruta o URL de referencia al documento
+          example: "/docs/licencia-conducir.pdf"
+
+    User:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+      properties:
+        _id:
+          type: string
+          description: Identificador único de MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c01"
+        firstName:
+          type: string
+          description: Nombre del usuario
+          example: "Ana"
+        lastName:
+          type: string
+          description: Apellido del usuario
+          example: "Pérez"
+        email:
+          type: string
+          format: email
+          description: Correo electrónico único del usuario
+          example: "ana.perez@shipnow.test"
+        password:
+          type: string
+          description: Contraseña del usuario
+          example: "coder123!"
+        role:
+          type: string
+          enum: [admin, customer, driver, store, user, cliente, repartidor]
+          default: customer
+          description: Rol asignado dentro de la plataforma
+          example: "customer"
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserDocument'
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-10-30T12:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-10-30T12:00:00.000Z"
+
+    UserInput:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+      properties:
+        firstName:
+          type: string
+          example: "Juan"
+        lastName:
+          type: string
+          example: "Gómez"
+        email:
+          type: string
+          format: email
+          example: "juan.gomez@shipnow.test"
+        password:
+          type: string
+          example: "secreto123"
+        role:
+          type: string
+          enum: [customer, driver, store, user, cliente, repartidor]
+          default: customer
+          description: Rol del usuario (no se permite crear rol 'admin' directamente desde este endpoint)
+          example: "customer"
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserDocument'
+
+    UserUpdateInput:
+      type: object
+      properties:
+        firstName:
+          type: string
+          example: "Juan Carlos"
+        lastName:
+          type: string
+          example: "Gómez"
+        email:
+          type: string
+          format: email
+          example: "juancarlos.gomez@shipnow.test"
+        role:
+          type: string
+          enum: [customer, driver, store, user, cliente, repartidor]
+          example: "driver"
+
+    OrderItem:
+      type: object
+      required:
+        - name
+        - quantity
+        - price
+      properties:
+        name:
+          type: string
+          description: Nombre del producto o artículo incluido en el pedido
+          example: "Auriculares Bluetooth Pro"
+        quantity:
+          type: integer
+          minimum: 1
+          description: Cantidad de unidades solicitadas (mínimo 1)
+          example: 2
+        price:
+          type: number
+          minimum: 0
+          description: Precio unitario del artículo (no puede ser negativo)
+          example: 15000
+
+    Order:
+      type: object
+      required:
+        - customer
+        - items
+        - deliveryAddress
+      properties:
+        _id:
+          type: string
+          description: Identificador único del pedido en MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c10"
+        customer:
+          oneOf:
+            - type: string
+              example: "665f1a2b3c4d5e6f7a8b9c01"
+            - $ref: '#/components/schemas/User'
+          description: ID del usuario cliente o documento poblado
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          description: Lista de artículos del pedido (al menos 1 item obligatorio)
+        deliveryAddress:
+          type: string
+          description: Dirección física de entrega
+          example: "Av. Corrientes 1234, CABA"
+        declaredValue:
+          type: number
+          description: Valor declarado del envío (por defecto suma de items)
+          example: 30000
+        shippingCost:
+          type: number
+          description: Costo de envío calculado según el entorno
+          example: 10
+        total:
+          type: number
+          description: Importe total del pedido (items + shippingCost)
+          example: 30010
+        status:
+          type: string
+          enum: [created, assigned, picked_up, in_transit, delivered, cancelled]
+          default: created
+          description: Estado actual del pedido
+          example: "created"
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+          description: Prioridad logística del pedido
+          example: "normal"
+        delivery:
+          type: string
+          nullable: true
+          description: Referencia a la entrega asociada (si existe)
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-10-30T12:15:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-10-30T12:15:00.000Z"
+
+    OrderInput:
+      type: object
+      required:
+        - customer
+        - items
+        - deliveryAddress
+      properties:
+        customer:
+          type: string
+          description: ID de un usuario existente en MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c01"
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        deliveryAddress:
+          type: string
+          example: "Av. Santa Fe 3200, CABA"
+        declaredValue:
+          type: number
+          example: 30000
+        status:
+          type: string
+          enum: [created, assigned, picked_up, in_transit, delivered, cancelled]
+          default: created
+          example: "created"
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+          example: "high"
+
+    OrderUpdateInput:
+      type: object
+      properties:
+        deliveryAddress:
+          type: string
+          example: "Av. Cabildo 2040, CABA"
+        status:
+          type: string
+          enum: [created, assigned, picked_up, in_transit, delivered, cancelled]
+          example: "in_transit"
+        priority:
+          type: string
+          enum: [low, normal, high]
+          example: "high"
+
+    Delivery:
+      type: object
+      required:
+        - order
+      properties:
+        _id:
+          type: string
+          description: Identificador único de la entrega en MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c20"
+        order:
+          oneOf:
+            - type: string
+              example: "665f1a2b3c4d5e6f7a8b9c10"
+            - $ref: '#/components/schemas/Order'
+          description: ID del pedido asociado o documento poblado
+        driver:
+          oneOf:
+            - type: string
+              nullable: true
+              example: "665f1a2b3c4d5e6f7a8b9c05"
+            - $ref: '#/components/schemas/User'
+          description: ID del usuario con rol 'driver'/'repartidor' asignado (opcional al crear)
+        status:
+          type: string
+          enum: [pending, assigned, in_transit, delivered]
+          default: pending
+          description: Estado operativo de la entrega
+          example: "assigned"
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+          description: Prioridad de la entrega
+          example: "normal"
+        assignedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-30T12:20:00.000Z"
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-10-30T12:20:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-10-30T12:20:00.000Z"
+
+    DeliveryInput:
+      type: object
+      required:
+        - order
+      properties:
+        order:
+          type: string
+          description: ID de un pedido existente en MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c10"
+        driver:
+          type: string
+          nullable: true
+          description: ID de un usuario existente con rol 'driver' o 'repartidor'
+          example: "665f1a2b3c4d5e6f7a8b9c05"
+        status:
+          type: string
+          enum: [pending, assigned, in_transit, delivered]
+          default: pending
+          example: "assigned"
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+          example: "normal"
+
+    DeliveryUpdateInput:
+      type: object
+      properties:
+        driver:
+          type: string
+          example: "665f1a2b3c4d5e6f7a8b9c05"
+        status:
+          type: string
+          enum: [pending, assigned, in_transit, delivered]
+          example: "delivered"
+        priority:
+          type: string
+          enum: [low, normal, high]
+          example: "high"
+
+    Product:
+      type: object
+      required:
+        - title
+        - code
+        - price
+      properties:
+        _id:
+          type: string
+          example: "665f1a2b3c4d5e6f7a8b9c30"
+        title:
+          type: string
+          example: "Teclado Mecánico RGB"
+        description:
+          type: string
+          example: "Switches rojos silenciosos, layout en español"
+        code:
+          type: string
+          example: "TEC-RGB-001"
+        price:
+          type: number
+          minimum: 0
+          example: 45000
+        stock:
+          type: integer
+          minimum: 0
+          example: 15
+        category:
+          type: string
+          example: "perifericos"
+        status:
+          type: string
+          enum: [available, out_of_stock]
+          example: "available"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-10-30T12:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-10-30T12:00:00.000Z"
+
+    ProductInput:
+      type: object
+      required:
+        - title
+        - code
+        - price
+      properties:
+        title:
+          type: string
+          example: "Teclado Mecánico RGB"
+        description:
+          type: string
+          example: "Switches rojos silenciosos, layout en español"
+        code:
+          type: string
+          example: "TEC-RGB-001"
+        price:
+          type: number
+          minimum: 0
+          example: 45000
+        stock:
+          type: integer
+          minimum: 0
+          default: 0
+          example: 15
+        category:
+          type: string
+          default: "general"
+          example: "perifericos"
+
+    SeedInput:
+      type: object
+      properties:
+        qty:
+          type: integer
+          minimum: 1
+          maximum: 400
+          default: 10
+          description: Cantidad de registros de prueba a insertar en MongoDB (entre 1 y 400)
+          example: 10
+        collection:
+          type: string
+          enum: [usuarios, users, pedidos, orders, entregas, deliveries, all, completo]
+          default: usuarios
+          description: Colección destino donde insertar los datos de prueba
+          example: "usuarios"
+
+    SeedResponse:
+      type: object
+      properties:
+        insertados:
+          oneOf:
+            - type: integer
+              example: 10
+            - type: object
+              properties:
+                usuarios:
+                  type: integer
+                  example: 15
+                pedidos:
+                  type: integer
+                  example: 10
+                entregas:
+                  type: integer
+                  example: 10
+          description: Cantidad total de documentos insertados (o desglose por entidad cuando collection es 'all')
+        coleccion:
+          type: string
+          description: Nombre normalizado de la colección impactada
+          example: "usuarios"
+
+    SuccessResponse:
+      type: object
+      description: Esquema estándar de respuesta exitosa (eliminaciones, confirmaciones y utilidades)
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Operación realizada exitosamente"
+        payload:
+          type: object
+          nullable: true
+          example: null
+
+    DeleteMessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Recurso eliminado"
+
+    LoggerTestResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Logs de prueba ejecutados correctamente en todos los niveles (debug, http, info, warning, error, fatal)"
+        levelsTested:
+          type: array
+          items:
+            type: string
+          example: ["debug", "http", "info", "warning", "error", "fatal"]
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - message
+        - code
+      description: Estructura uniforme devuelta por el middleware global de errores de ShipNow
+      properties:
+        status:
+          type: string
+          enum: [error]
+          example: "error"
+        message:
+          type: string
+          description: Mensaje descriptivo del error ocurrido
+          example: "Faltan datos obligatorios o formato inválido"
+        code:
+          type: string
+          enum:
+            - INTERNAL_SERVER_ERROR
+            - ROUTE_NOT_FOUND
+            - USER_NOT_FOUND
+            - PRODUCT_NOT_FOUND
+            - ORDER_NOT_FOUND
+            - DELIVERY_NOT_FOUND
+            - VALIDATION_ERROR
+            - INVALID_QUANTITY
+            - INVALID_USER_ROLE
+            - INVALID_STATUS
+            - CONFLICT_ERROR
+            - FORBIDDEN_OPERATION
+            - DATABASE_ERROR
+          description: Código estandarizado del diccionario de errores de la aplicación
+          example: "VALIDATION_ERROR"
+        details:
+          type: object
+          nullable: true
+          description: Detalles adicionales opcionales del error
