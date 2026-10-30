@@ -65,18 +65,18 @@ app.use(notFoundHandler);
 // Middleware global de manejo uniforme de errores
 app.use(errorHandler);
 
-// Inicialización de base de datos y arranque del servidor
-mongoose.connect(config.MONGODB_URI)
+// Arranque del servidor HTTP y conexión a MongoDB
+app.listen(config.PORT, () => {
+  logger.info(`Servidor ShipNow escuchando en el puerto ${config.PORT} (modo ${config.NODE_ENV})`);
+  logger.info(`Documentación Swagger UI disponible en http://localhost:${config.PORT}/api/docs`);
+});
+
+mongoose.connect(config.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => {
     logger.info('Conexión a MongoDB establecida exitosamente');
-    app.listen(config.PORT, () => {
-      logger.info(`Servidor ShipNow escuchando en el puerto ${config.PORT} (modo ${config.NODE_ENV})`);
-      logger.info(`Documentación Swagger UI disponible en http://localhost:${config.PORT}/api/docs`);
-    });
   })
   .catch((error) => {
     logger.fatal(`Error crítico al conectar con MongoDB: ${error.message}`);
-    process.exit(1);
   });
 
 export default app;
