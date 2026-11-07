@@ -13,7 +13,7 @@ const swaggerDefinition = {
   info: {
     title: 'ShipNow API — Sistema de Gestión Logística',
     version: '1.0.0',
-    description: `API RESTful profesional para la gestión integral de logística, usuarios, productos, pedidos, entregas, generación de datos de prueba (Mocks con Faker) y monitoreo de logs con Winston.
+    description: `API RESTful profesional para la gestión integral de logística, usuarios, productos, pedidos, entregas, generación de datos de prueba (Mocks con Faker), monitoreo de logs con Winston y suite de testing funcional con Mocha, Chai y Supertest.
 
 ### Propósito de la API
 Centralizar las operaciones de **ShipNow** bajo una arquitectura en 3 capas (**Controller — Service — Repository**), garantizando validación estricta de datos, manejo uniforme de errores de dominio y trazabilidad completa de eventos.`,
@@ -46,11 +46,11 @@ Centralizar las operaciones de **ShipNow** bajo una arquitectura en 3 capas (**C
     },
     {
       name: 'Mocks',
-      description: 'Generación de datos simulados en memoria con Faker e inserción controlada (seed) en MongoDB.'
+      description: 'Generación de datos simulados en memoria con Faker (incluyendo alias /mockingUsers) e inserción controlada (seed) en MongoDB.'
     },
     {
       name: 'Logger',
-      description: 'Herramienta interna de validación y monitoreo de niveles de logging (no representa una funcionalidad de negocio).'
+      description: 'Herramienta interna de validación y monitoreo de niveles de logging y estado de salud del servidor (no representa una funcionalidad de negocio).'
     }
   ]
 };

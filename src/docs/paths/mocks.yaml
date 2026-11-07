@@ -53,6 +53,45 @@ paths:
                     message: "qty no puede superar 400"
                     code: "INVALID_QUANTITY"
 
+  /api/mocks/mockingUsers:
+    get:
+      summary: Generar usuarios simulados en memoria (Alias compatible)
+      description: |
+        Alias directo de `GET /api/mocks/users`. Genera usuarios de prueba en memoria utilizando **@faker-js/faker** con roles coherentes (`customer` y `driver`) **sin persistirlos en MongoDB**.
+        Valida que el parámetro `qty` sea un número entero entre 0 y 400 (por defecto 10).
+      tags:
+        - Mocks
+      parameters:
+        - in: query
+          name: qty
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 0
+            maximum: 400
+          description: Cantidad de usuarios simulados a generar (entre 0 y 400)
+          example: 5
+      responses:
+        '200':
+          description: Lista de usuarios simulados generada en memoria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '400':
+          description: Cantidad inválida (valor negativo, no numérico o superior a 400)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "qty no puede ser negativo"
+                code: "INVALID_QUANTITY"
+
   /api/mocks/orders:
     get:
       summary: Generar pedidos simulados en memoria
