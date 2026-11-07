@@ -1,8 +1,9 @@
-﻿node_modules
+node_modules
 npm-debug.log*
 .DS_Store
 docs-clase
 .env
+.env.test
 logs/*
 !logs/.gitkeep
 *.log
