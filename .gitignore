@@ -6,4 +6,6 @@ docs-clase
 .env.test
 logs/*
 !logs/.gitkeep
+uploads/*
+!uploads/.gitkeep
 *.log

@@ -96,3 +96,33 @@ export class DatabaseOperationError extends CustomError {
     super(message, 500, ERROR_CODES.DATABASE_ERROR);
   }
 }
+
+export class FileRequiredError extends CustomError {
+  constructor(message = ERROR_DICTIONARY[ERROR_CODES.FILE_REQUIRED].message) {
+    super(message, 400, ERROR_CODES.FILE_REQUIRED);
+  }
+}
+
+export class InvalidFileTypeError extends CustomError {
+  constructor(message = ERROR_DICTIONARY[ERROR_CODES.INVALID_FILE_TYPE].message) {
+    super(message, 400, ERROR_CODES.INVALID_FILE_TYPE);
+  }
+}
+
+export class FileTooLargeError extends CustomError {
+  constructor(message = ERROR_DICTIONARY[ERROR_CODES.FILE_TOO_LARGE].message) {
+    super(message, 400, ERROR_CODES.FILE_TOO_LARGE);
+  }
+}
+
+export class InvalidDocumentTypeError extends CustomError {
+  constructor(message = ERROR_DICTIONARY[ERROR_CODES.INVALID_DOCUMENT_TYPE].message) {
+    super(message, 400, ERROR_CODES.INVALID_DOCUMENT_TYPE);
+  }
+}
+
+export class FileStorageError extends CustomError {
+  constructor(message = ERROR_DICTIONARY[ERROR_CODES.FILE_STORAGE_ERROR].message) {
+    super(message, 500, ERROR_CODES.FILE_STORAGE_ERROR);
+  }
+}

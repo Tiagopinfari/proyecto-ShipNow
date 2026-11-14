@@ -11,7 +11,12 @@ export const ERROR_CODES = Object.freeze({
   INVALID_STATUS: 'INVALID_STATUS',
   CONFLICT_ERROR: 'CONFLICT_ERROR',
   FORBIDDEN_OPERATION: 'FORBIDDEN_OPERATION',
-  DATABASE_ERROR: 'DATABASE_ERROR'
+  DATABASE_ERROR: 'DATABASE_ERROR',
+  FILE_REQUIRED: 'FILE_REQUIRED',
+  INVALID_FILE_TYPE: 'INVALID_FILE_TYPE',
+  FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  INVALID_DOCUMENT_TYPE: 'INVALID_DOCUMENT_TYPE',
+  FILE_STORAGE_ERROR: 'FILE_STORAGE_ERROR'
 });
 
 export const ERROR_DICTIONARY = Object.freeze({
@@ -66,6 +71,26 @@ export const ERROR_DICTIONARY = Object.freeze({
   [ERROR_CODES.DATABASE_ERROR]: {
     statusCode: 500,
     message: 'Error al operar con la base de datos'
+  },
+  [ERROR_CODES.FILE_REQUIRED]: {
+    statusCode: 400,
+    message: 'El archivo es obligatorio para realizar la carga'
+  },
+  [ERROR_CODES.INVALID_FILE_TYPE]: {
+    statusCode: 400,
+    message: 'Tipo o extensión de archivo no permitido (formatos aceptados: PDF, JPG, JPEG, PNG, WEBP)'
+  },
+  [ERROR_CODES.FILE_TOO_LARGE]: {
+    statusCode: 400,
+    message: 'El archivo supera el tamaño máximo permitido (5 MB)'
+  },
+  [ERROR_CODES.INVALID_DOCUMENT_TYPE]: {
+    statusCode: 400,
+    message: 'Tipo de documento inválido (opciones válidas: user_document, driver_license, delivery_proof)'
+  },
+  [ERROR_CODES.FILE_STORAGE_ERROR]: {
+    statusCode: 500,
+    message: 'Error al almacenar el archivo en el servidor'
   }
 });
 
