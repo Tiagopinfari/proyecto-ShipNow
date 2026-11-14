@@ -1,12 +1,12 @@
 # ShipNow API — Backend 3 (Coderhouse)
 
-API RESTful profesional de logística para **ShipNow**, desarrollada bajo arquitectura en 3 capas (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque, módulo de mocking con Faker, capa centralizada de manejo de errores, sistema profesional de logging con Winston, documentación interactiva con Swagger / OpenAPI 3.0 y **suite de testing funcional automatizado con Mocha, Chai y Supertest** (Pre-entrega Módulo 6).
+API RESTful profesional de logística para **ShipNow**, desarrollada bajo arquitectura en 3 capas (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque, módulo de mocking con Faker, capa centralizada de manejo de errores, sistema profesional de logging con Winston, documentación interactiva con Swagger / OpenAPI 3.0, suite de testing funcional con Mocha, Chai y Supertest, y **gestión profesional de carga de archivos, documentos y comprobantes con Multer** (Pre-entrega Módulo 7).
 
 ---
 
 ## 🏛️ Arquitectura del Sistema
 
-El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad (separando `src/app.js` de `src/server.js`), independencia de la base de datos, observabilidad mediante logs y documentación OpenAPI modular:
+El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad (separando `src/app.js` de `src/server.js`), independencia de la base de datos, observabilidad mediante logs, gestión de archivos en disco con metadatos en MongoDB y documentación OpenAPI modular:
 
 ```text
 [ Cliente HTTP / Navegador / Supertest ]
@@ -23,11 +23,13 @@ El sistema implementa el patrón de capas desacopladas asegurando alta cohesión
        ▼
  [ Router ]                ──► Enrutamiento declarativo limpio (src/routes/*.js)
        │
+       ├───► [ Multer Middleware ] ──► Validación de campo, formato MIME/extensión y tamaño (src/config/multer.config.js)
+       │
        ▼
 [ Controller ]             ──► Manejo de req/res. Delega errores en next(error).
        │
        ▼
- [ Service ]               ──► Reglas de negocio. Emite logs informativos y advertencias de dominio.
+ [ Service ]               ──► Reglas de negocio, almacenamiento en /uploads y asociación de metadatos.
        │
        ├───► [ Mocks Generator ] ──► Generación de datos simulados en memoria con Faker.
        │
@@ -50,125 +52,97 @@ errorHandler (Global)  ──► logger.warning() [4xx]  ──► errorResponse
 
 ---
 
-## 🧪 Testing Funcional Automatizado (Pre-entrega Módulo 6)
+## 📂 Carga de Archivos, Documentos y Comprobantes con Multer (Pre-entrega Módulo 7)
 
-El proyecto cuenta con una suite de **40 tests funcionales automatizados** que validan de punta a punta el comportamiento de los endpoints principales, tanto en **casos exitosos** como en **casos de error esperados**, verificando códigos de estado HTTP y la estructura exacta del cuerpo JSON de respuesta.
+La API incorpora gestión completa de archivos mediante **Multer** (`multipart/form-data`), separando la configuración en [`src/config/multer.config.js`](src/config/multer.config.js) para mantener los routers limpios y conectando todas las validaciones al sistema centralizado de errores y al logger de Winston.
+
+### 🗂️ Estructura de Carpetas de Almacenamiento (`/uploads`)
+
+Los archivos físicos se almacenan en el servidor organizados por subcarpetas según el tipo de documento (`DOCUMENT_TYPES`):
+
+- `uploads/users/documents/` — Documentos de identidad / generales de usuario (`user_document`).
+- `uploads/users/licenses/` — Licencias de conducir de repartidores (`driver_license`).
+- `uploads/deliveries/proofs/` — Comprobantes asociados a entregas y pedidos (`delivery_proof`).
+
+> **Exclusión en Git (`.gitignore`):** La carpeta `uploads/*` está ignorada en `.gitignore` (conservando únicamente `uploads/.gitkeep`) para evitar que archivos subidos durante pruebas o uso local se suban a GitHub.
+
+### 🛡️ Validaciones y Reglas de Almacenamiento
+
+1. **Formatos permitidos:** `PDF`, `JPG`, `JPEG`, `PNG` y `WEBP` (validación doble de `mimetype` y extensión).
+2. **Tamaño máximo:** **5 MB** por archivo (`MAX_FILE_SIZE = 5 * 1024 * 1024`).
+3. **Nombre del campo de archivo:** `file`.
+4. **Prevención de archivos huérfanos:** El archivo se valida en memoria y **solo se escribe en disco después de confirmar que la entidad destino (usuario, entrega o pedido) existe en MongoDB** y que el `documentType` es válido.
+5. **Solo metadatos en MongoDB:** En la base de datos nunca se guarda el binario del archivo, sino exclusivamente sus metadatos:
+   - `originalName` / `name`: Nombre original del archivo.
+   - `filename`: Nombre único generado con timestamp y sufijo aleatorio.
+   - `path` / `reference`: Ruta relativa en el servidor (ej. `uploads/users/licenses/...`).
+   - `mimetype`: Tipo MIME validado.
+   - `size`: Tamaño en bytes.
+   - `documentType`: `user_document`, `driver_license` o `delivery_proof`.
+   - `uploadedAt`: Fecha de carga.
+
+### 📡 Endpoints de Carga de Archivos (`multipart/form-data`)
+
+| Método y Ruta | Campo Archivo | Campos Adicionales | Descripción |
+| :--- | :---: | :---: | :--- |
+| **`POST /api/users/:id/documents`** | `file` (requerido) | `documentType` (`user_document` \| `driver_license` \| `delivery_proof`) | Sube un documento o licencia, lo guarda en la subcarpeta correspondiente y registra sus metadatos en `user.documents`. |
+| **`POST /api/deliveries/:id/proof`** | `file` (requerido) | `documentType` (opcional, default: `delivery_proof`) | Sube un comprobante de entrega, lo almacena en `uploads/deliveries/proofs` y registra los metadatos en `delivery.proof` y `delivery.proofs`. |
+| **`POST /api/orders/:id/proof`** | `file` (requerido) | `documentType` (opcional, default: `delivery_proof`) | Sube un comprobante asociado a un pedido y registra sus metadatos en `order.proof` y `order.proofs`. |
+
+---
+
+## 🧪 Testing Funcional Automatizado (Pre-entrega Módulo 6 y 7)
+
+El proyecto cuenta con una suite de **50 tests funcionales automatizados** que validan de punta a punta el comportamiento de todos los módulos, incluyendo la carga de archivos con Multer.
 
 ### 🛠️ Herramientas Utilizadas
 
 | Herramienta | Rol en la Suite de Testing |
 | :--- | :--- |
-| **Mocha** | Test runner encargado de estructurar los bloques (`describe`, `it`), gestionar los hooks de ciclo de vida (`before`, `beforeEach`, `after`) y ejecutar las pruebas. |
+| **Mocha** | Test runner encargado de estructurar los bloques (`describe`, `it`), gestionar los hooks de ciclo de vida (`before`, `beforeEach`, `afterEach`, `after`) y ejecutar las pruebas. |
 | **Chai** | Librería de aserciones (`expect`) utilizada para validar tipos de datos, códigos de estado, propiedades obligatorias y códigos del diccionario de errores. |
-| **Supertest** | Cliente HTTP de alto nivel que importa directamente `src/app.js` para ejecutar peticiones contra la API sin necesidad de levantar manualmente un puerto. |
+| **Supertest** | Cliente HTTP de alto nivel que importa directamente `src/app.js` (soportando JSON y `multipart/form-data` con `.attach()` y `.field()`) sin abrir manualmente un puerto. |
 | **cross-env** | Garantiza la inyección multiplataforma de `NODE_ENV=test` al ejecutar el comando de pruebas. |
 
-### 🔐 Separación del Entorno de Testing y Base de Datos
+### 🔐 Separación del Entorno de Testing y Limpieza
 
-1. **Separación de `app` y `server`:**
-   - [`src/app.js`](src/app.js) configura los middlewares, rutas, Swagger y manejadores de errores sin ejecutar `app.listen()`.
-   - [`src/server.js`](src/server.js) importa `app`, establece la conexión con MongoDB e inicia el servidor HTTP únicamente cuando no se está ejecutando en modo `test`.
-2. **Variables de entorno y Base de Datos aislada:**
-   - Al correr `npm test`, `NODE_ENV` se establece en `test`.
-   - [`src/config/env.config.js`](src/config/env.config.js) carga automáticamente `.env.test` (si existe) y selecciona la variable `MONGODB_TEST_URI` (o redirige automáticamente la base de datos a `shipnow_test`), asegurando que **nunca se toquen ni contaminen los datos de desarrollo o producción**.
-   - Si se corre en un entorno sin conexión a una instancia de MongoDB activa, [`test/setup.test.js`](test/setup.test.js) dispone de un adaptador de persistencia aislado en memoria para garantizar que la suite sea 100% reproducible en cualquier entorno de evaluación.
-3. **Estrategia de Limpieza y Datos Controlados:**
-   - Los datos de prueba se generan de forma repetible usando los generadores de mocks (`generateMockUser`, etc.).
-   - En cada suite se limpian las colecciones involucradas mediante hooks `beforeEach` y `after` (`deleteMany({})`), evitando que un test dependa del estado previo o del orden de ejecución.
+- [`src/app.js`](src/app.js) define la aplicación Express desacoplada de `app.listen()`.
+- En [`test/setup.test.js`](test/setup.test.js), si la base de datos remota no está accesible, se registra explícitamente una advertencia en el logger indicando el motivo de conexión antes de activar el adaptador de persistencia en memoria para que ningún error de entorno quede oculto.
+- Los archivos físicos creados durante las pruebas de carga (`test/uploads.test.js`) se limpian automáticamente en el hook `afterEach` para mantener limpia la carpeta `uploads/`.
 
 ### ▶️ Cómo Ejecutar los Tests
-
-Para correr la suite completa de tests funcionales:
 
 ```bash
 npm test
 ```
 
-*(Ejecuta internamente: `cross-env NODE_ENV=test mocha "test/**/*.test.js" --timeout 20000 --exit`)*
+### 📋 Suites de Pruebas en `/test` (50 Passing)
 
-### 📋 Módulos y Casos Cubiertos en `/test`
-
-- **`test/users.test.js` (`/api/users`):**
-  - **Exitosos:** Listado de usuarios (`200`), creación de usuario válido (`201`), obtención por ID (`200`), actualización (`200`) y eliminación (`200`).
-  - **Errores:** Datos incompletos (`400 VALIDATION_ERROR`), rol inexistente (`400 INVALID_USER_ROLE`), intento de crear rol `admin` (`403 FORBIDDEN_OPERATION`), email duplicado (`409 CONFLICT_ERROR`), ID inexistente (`404 USER_NOT_FOUND`) e ID malformado (`400 VALIDATION_ERROR`).
-- **`test/orders.test.js` (`/api/orders`):**
-  - **Exitosos:** Creación de pedido asociado a un cliente válido verificando cálculo automático de `declaredValue`, `shippingCost` y `total` (`201`), listado con cliente poblado (`200`), consulta por ID (`200`), actualización de estado y prioridad (`200`), y eliminación (`200`).
-  - **Errores:** Pedido sin ítems (`400 VALIDATION_ERROR`), cliente inexistente (`404 USER_NOT_FOUND`), estado inválido al crear o actualizar (`400 INVALID_STATUS`), y pedido inexistente (`404 ORDER_NOT_FOUND`).
-- **`test/deliveries.test.js` (`/api/deliveries`):**
-  - **Exitosos:** Creación de entrega asociada a pedido y repartidor válido (`201`) y actualización de estado a `delivered` (`200`).
-  - **Errores:** Asignación de un usuario que no tiene rol de repartidor (`400 INVALID_USER_ROLE`), actualización con estado inválido (`400 INVALID_STATUS`) y entrega inexistente (`404 DELIVERY_NOT_FOUND`).
-- **`test/mocks.test.js` (`/api/mocks`):**
-  - **Exitosos:** Generación en memoria de usuarios (`GET /api/mocks/users`), alias `GET /api/mocks/mockingUsers`, pedidos (`GET /api/mocks/orders`) comprobando que no persisten en DB, e inserción controlada con `POST /api/mocks/seed` (`201`).
-  - **Errores:** Cantidades negativas (`qty=-5`), no numéricas (`qty=abc`), superiores al límite (`qty=999`), `qty=0` en seed (`400 INVALID_QUANTITY`) y colección inválida (`400 VALIDATION_ERROR`).
-- **`test/system.test.js` (Logger, Swagger y 404):**
-  - **Exitosos:** Validación de `GET /api/loggerTest` y su alias `GET /loggerTest` (`200` con los 6 niveles de Winston), carga de la interfaz HTML en `GET /api/docs/` (`200`) y especificación JSON en `GET /api/docs.json` (`200`).
-  - **Errores:** Petición a ruta inexistente verificando respuesta `404` y código `ROUTE_NOT_FOUND`.
+1. **`test/users.test.js` (`/api/users`):** ABM de usuarios y errores (`VALIDATION_ERROR`, `INVALID_USER_ROLE`, `FORBIDDEN_OPERATION`, `CONFLICT_ERROR`, `USER_NOT_FOUND`).
+2. **`test/orders.test.js` (`/api/orders`):** Creación con cálculo de costos, consulta, actualización de estados y errores (`VALIDATION_ERROR`, `USER_NOT_FOUND`, `INVALID_STATUS`, `ORDER_NOT_FOUND`).
+3. **`test/deliveries.test.js` (`/api/deliveries`):** Creación vinculada a pedido y repartidor, cambio de estado y errores (`INVALID_USER_ROLE`, `INVALID_STATUS`, `DELIVERY_NOT_FOUND`).
+4. **`test/mocks.test.js` (`/api/mocks`):** Generación en memoria (`/users`, `/mockingUsers`, `/orders`), inserción con `POST /seed` y errores (`INVALID_QUANTITY`, `VALIDATION_ERROR`).
+5. **`test/uploads.test.js` (Documentos y Comprobantes con Multer):**
+   - Carga exitosa de documento PDF en usuario (`201`), comprobante PNG en entrega (`201`) y comprobante JPG en pedido (`201`), verificando archivo físico en disco y metadatos en la entidad.
+   - Errores: falta de archivo (`400 FILE_REQUIRED`), tipo de archivo inválido (`400 INVALID_FILE_TYPE`), `documentType` inválido (`400 INVALID_DOCUMENT_TYPE`), archivo mayor a 5 MB (`400 FILE_TOO_LARGE`), y entidad inexistente (`404 USER_NOT_FOUND`, `404 DELIVERY_NOT_FOUND`, `404 ORDER_NOT_FOUND`).
+6. **`test/system.test.js` (Logger, Swagger y 404):** Validación de `/api/loggerTest`, `/loggerTest`, `/api/docs/`, `/api/docs.json` y rutas inexistentes (`404 ROUTE_NOT_FOUND`).
 
 ---
 
 ## 📖 Documentación Interactiva con Swagger / OpenAPI (Pre-entrega Módulo 5)
 
-La API cuenta con documentación interactiva construida con **OpenAPI 3.0.3**, utilizando `swagger-jsdoc` y `swagger-ui-express`.
-Toda la configuración se centraliza en [`src/config/swagger.js`](src/config/swagger.js) y las especificaciones YAML se organizan modularmente en `src/docs/`.
+Una vez iniciado el servidor en el puerto `3000`, la documentación interactiva se encuentra en:
 
-### 🔗 Rutas de Acceso a la Documentación
+- **Swagger UI:** [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
+- **OpenAPI JSON Spec:** [http://localhost:3000/api/docs.json](http://localhost:3000/api/docs.json)
 
-Una vez iniciado el servidor (por defecto en el puerto `3000`), podés acceder a:
-
-- **Interfaz Interactiva (Swagger UI):** [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
-- **Especificación OpenAPI en formato JSON:** [http://localhost:3000/api/docs.json](http://localhost:3000/api/docs.json)
-
-### 🗂️ Módulos y Rutas Documentadas (Tags)
-
-| Tag | Archivos YAML | Endpoints Documentados (incluyendo Aliases) |
-| :--- | :--- | :--- |
-| **`Users`** | `src/docs/paths/users.yaml` | `GET /api/users`, `POST /api/users`, `GET /api/users/{id}`, `PUT /api/users/{id}`, `DELETE /api/users/{id}` |
-| **`Orders`** | `src/docs/paths/orders.yaml` | `GET /api/orders`, `POST /api/orders`, `GET /api/orders/{id}`, `PUT /api/orders/{id}`, `DELETE /api/orders/{id}` |
-| **`Deliveries`** | `src/docs/paths/deliveries.yaml` | `GET /api/deliveries`, `POST /api/deliveries`, `GET /api/deliveries/{id}`, `PUT /api/deliveries/{id}`, `DELETE /api/deliveries/{id}` |
-| **`Products`** | `src/docs/paths/products.yaml` | `GET /api/products`, `POST /api/products`, `GET /api/products/{id}`, `PUT /api/products/{id}`, `DELETE /api/products/{id}`, `GET /api/products/{id}/shipping-cost` |
-| **`Mocks`** | `src/docs/paths/mocks.yaml` | `GET /api/mocks/users`, `GET /api/mocks/mockingUsers` *(alias)*, `GET /api/mocks/orders`, `GET /api/mocks/deliveries`, `GET /api/mocks/all`, `POST /api/mocks/seed` |
-| **`Logger`** | `src/docs/paths/logger.yaml` | `GET /api/loggerTest`, `GET /loggerTest` *(alias)*, `GET /api/health`, `GET /health` *(alias)* |
-
-### 🧩 Schemas Reutilizables (`src/docs/schemas/components.yaml`)
-
-Todos los endpoints referencian esquemas centralizados en `#/components/schemas/`:
-- **Entidades principales:** `User`, `Order`, `OrderItem`, `Delivery`, `Product`, `UserDocument`.
-- **DTOs de entrada (Request Bodies):** `UserInput`, `UserUpdateInput`, `OrderInput`, `OrderUpdateInput`, `DeliveryInput`, `DeliveryUpdateInput`, `ProductInput`, `SeedInput`.
-- **Respuestas estandarizadas:** `ErrorResponse`, `SuccessResponse`, `DeleteMessageResponse`, `SeedResponse`, `LoggerTestResponse`.
-
-### 💡 Guía Rápida para Probar desde Swagger UI ("Try it out")
-
-1. **Poblar datos rápidamente con Seed:**
-   - En el tag **`Mocks`** → `POST /api/mocks/seed`, presioná **"Try it out"** y ejecutalo con `collection: "all"` y `qty: 5`.
-2. **Probar creación de Pedidos (`POST /api/orders`) y Entregas (`POST /api/deliveries`):**
-   - Ejecutá `GET /api/users` para copiar un `_id` real de un usuario con rol `customer` (para crear un pedido) o con rol `driver` (para asignar una entrega).
-3. **Verificar errores documentados:**
-   - Probá enviar `qty=-5` en `GET /api/mocks/users` o `GET /api/mocks/mockingUsers` para observar el error `400 INVALID_QUANTITY`.
+Incluye todos los módulos agrupados por tags (`Users`, `Orders`, `Deliveries`, `Products`, `Mocks`, `Logger`), todos los aliases (`/api/mocks/mockingUsers`, `/loggerTest`, `/api/health`, `/health`) y los endpoints `multipart/form-data` de carga de documentos y comprobantes listos para probar desde el botón **"Try it out"** seleccionando un archivo desde tu computadora.
 
 ---
 
-## 📝 Sistema de Logging Profesional (Pre-entrega Módulo 4)
+## 🛡️ Diccionario Centralizado de Errores
 
-Implementado en [`src/config/logger.js`](src/config/logger.js) con **Winston** y **winston-daily-rotate-file**:
-
-| Nivel | Prioridad | Color | Uso en ShipNow API |
-| :--- | :---: | :---: | :--- |
-| **`fatal`** | 0 | Magenta | Errores críticos de conexión inicial a MongoDB o arranque. |
-| **`error`** | 1 | Rojo | Errores inesperados del servidor (5xx) o fallas de base de datos. |
-| **`warning`**| 2 | Amarillo | Errores esperados de negocio/validación (4xx) y rutas no encontradas (404). |
-| **`info`** | 3 | Azul | Eventos clave del servidor y operaciones de negocio exitosas. |
-| **`http`** | 4 | Verde | Registro de cada petición HTTP con código de estado y duración en ms. |
-| **`debug`** | 5 | Cyan | Mensajes detallados para depuración en desarrollo. |
-
-- **Desarrollo (`NODE_ENV=development`):** Consola activa desde `debug` hasta `fatal`.
-- **Producción (`NODE_ENV=production`):** Consola activa desde `info` hasta `fatal`.
-- **Persistencia y Rotación:** Los niveles `error` y `fatal` se persisten en `logs/error.log` (máx. 5 MB) y `logs/errors-%DATE%.log` (rotación diaria, retención de 14 días).
-
----
-
-## 🛡️ Capa Centralizada de Gestión Profesional de Errores (Pre-entrega Módulo 3)
-
-Todos los errores responden con la estructura uniforme definida en `ErrorResponse`:
+Todos los errores del sistema responden con la estructura uniforme `ErrorResponse`:
 ```json
 {
   "status": "error",
@@ -177,58 +151,28 @@ Todos los errores responden con la estructura uniforme definida en `ErrorRespons
 }
 ```
 
-Códigos del diccionario de errores ([`src/utils/errorDictionary.js`](src/utils/errorDictionary.js)):
-- `VALIDATION_ERROR` (400), `INVALID_QUANTITY` (400), `INVALID_USER_ROLE` (400), `INVALID_STATUS` (400)
-- `FORBIDDEN_OPERATION` (403)
-- `ROUTE_NOT_FOUND` (404), `USER_NOT_FOUND` (404), `PRODUCT_NOT_FOUND` (404), `ORDER_NOT_FOUND` (404), `DELIVERY_NOT_FOUND` (404)
-- `CONFLICT_ERROR` (409)
-- `INTERNAL_SERVER_ERROR` (500), `DATABASE_ERROR` (500)
+Códigos soportados en [`src/utils/errorDictionary.js`](src/utils/errorDictionary.js):
+- **Validación y Dominio (400):** `VALIDATION_ERROR`, `INVALID_QUANTITY`, `INVALID_USER_ROLE`, `INVALID_STATUS`
+- **Archivos / Multer (400 / 500):** `FILE_REQUIRED` (400), `INVALID_FILE_TYPE` (400), `FILE_TOO_LARGE` (400), `INVALID_DOCUMENT_TYPE` (400), `FILE_STORAGE_ERROR` (500)
+- **Permisos y Conflictos (403 / 409):** `FORBIDDEN_OPERATION` (403), `CONFLICT_ERROR` (409)
+- **Recursos No Encontrados (404):** `ROUTE_NOT_FOUND`, `USER_NOT_FOUND`, `PRODUCT_NOT_FOUND`, `ORDER_NOT_FOUND`, `DELIVERY_NOT_FOUND`
+- **Servidor y Base de Datos (500):** `INTERNAL_SERVER_ERROR`, `DATABASE_ERROR`
 
 ---
 
-## 🚀 Instalación, Variables de Entorno y Ejecución
-
-### Prerrequisitos
-- **Node.js** (v18+)
-- **MongoDB** local o cluster en MongoDB Atlas
-
-### Variables de Entorno (`.env.example`)
-Copiá el archivo `.env.example` a `.env` y configurá tus valores (todos los archivos usan de forma consistente el puerto `3000`):
-
-```env
-# Configuración de Entorno y Servidor
-PORT=3000
-NODE_ENV=development
-
-# Base de Datos MongoDB (Desarrollo / Producción)
-MONGODB_URI=mongodb://127.0.0.1:27017/shipnow
-
-# Base de Datos MongoDB exclusiva para Testing (Mocha / Chai / Supertest)
-MONGODB_TEST_URI=mongodb://127.0.0.1:27017/shipnow_test
-
-# Seguridad y Servicios Externos
-JWT_SECRET=tu_clave_secreta_jwt
-SHIPPING_API_KEY=tu_shipping_api_key
-```
-
-### Comandos Disponibles
+## 🚀 Instalación y Ejecución
 
 1. **Instalar dependencias:**
    ```bash
    npm install
    ```
-
-2. **Iniciar servidor en modo desarrollo:**
+2. **Configurar variables de entorno:**
+   Copiar `.env.example` a `.env` (puerto `3000`).
+3. **Iniciar en desarrollo:**
    ```bash
    npm run dev
    ```
-
-3. **Iniciar servidor en modo producción:**
-   ```bash
-   npm start
-   ```
-
-4. **Ejecutar la suite de tests funcionales:**
+4. **Ejecutar los 50 tests funcionales:**
    ```bash
    npm test
    ```

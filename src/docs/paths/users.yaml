@@ -234,3 +234,97 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/{id}/documents:
+    post:
+      summary: Subir documento o licencia de un usuario (multipart/form-data)
+      description: |
+        Recibe un archivo mediante `multipart/form-data` en el campo **`file`** y un tipo de documento opcional en **`documentType`** (`user_document`, `driver_license`, `delivery_proof`).
+        Verifica que el usuario exista, valida formato (PDF, JPG, JPEG, PNG, WEBP) y tamaño máximo (5 MB), guarda el archivo en la subcarpeta correspondiente de `/uploads` y registra únicamente sus **metadatos** en el array `documents` del usuario.
+      tags:
+        - Users
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único del usuario en MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c01"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Archivo a subir (formatos permitidos PDF, JPG, JPEG, PNG, WEBP — máx. 5 MB)
+                documentType:
+                  type: string
+                  enum: [user_document, driver_license, delivery_proof]
+                  default: user_document
+                  description: Tipo de documento asociado al usuario
+                  example: "driver_license"
+      responses:
+        '201':
+          description: Documento cargado en disco y metadatos registrados en el usuario exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDocumentUploadResponse'
+        '400':
+          description: Error de validación de archivo (archivo faltante, formato no permitido, tamaño excedido o documentType inválido)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                ArchivoFaltante:
+                  summary: No se adjuntó archivo en el campo 'file'
+                  value:
+                    status: "error"
+                    message: "El archivo es obligatorio y debe enviarse en el campo \"file\""
+                    code: "FILE_REQUIRED"
+                TipoArchivoInvalido:
+                  summary: Extensión o MIME no permitido
+                  value:
+                    status: "error"
+                    message: "Tipo de archivo no permitido (text/plain). Solo se aceptan PDF, JPG, JPEG, PNG y WEBP"
+                    code: "INVALID_FILE_TYPE"
+                TamanoExcedido:
+                  summary: El archivo supera los 5 MB
+                  value:
+                    status: "error"
+                    message: "El archivo supera el tamaño máximo permitido de 5 MB"
+                    code: "FILE_TOO_LARGE"
+                TipoDocumentoInvalido:
+                  summary: documentType fuera de las constantes DOCUMENT_TYPES
+                  value:
+                    status: "error"
+                    message: "Tipo de documento inválido (\"pasaporte_falso\"). Valores permitidos: user_document, driver_license, delivery_proof"
+                    code: "INVALID_DOCUMENT_TYPE"
+        '404':
+          description: El usuario especificado no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Usuario no encontrado"
+                code: "USER_NOT_FOUND"
+        '500':
+          description: Error al guardar el archivo en el servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Error al almacenar el archivo en el servidor"
+                code: "FILE_STORAGE_ERROR"

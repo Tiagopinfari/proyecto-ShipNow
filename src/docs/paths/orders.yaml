@@ -222,3 +222,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/orders/{id}/proof:
+    post:
+      summary: Subir comprobante asociado a un pedido (multipart/form-data)
+      description: |
+        Recibe un archivo de comprobante en el campo **`file`** (`multipart/form-data`), valida que el pedido exista en MongoDB, guarda el archivo en `uploads/deliveries/proofs` y registra los metadatos en la entidad `Order`.
+      tags:
+        - Orders
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único del pedido en MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c10"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Archivo del comprobante (PDF, JPG, JPEG, PNG, WEBP — máx. 5 MB)
+                documentType:
+                  type: string
+                  enum: [delivery_proof, user_document, driver_license]
+                  default: delivery_proof
+                  description: Tipo de documento (por defecto delivery_proof)
+                  example: "delivery_proof"
+      responses:
+        '201':
+          description: Comprobante cargado y asociado exitosamente al pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderProofUploadResponse'
+        '400':
+          description: Archivo faltante, tipo de archivo inválido, tamaño superado o documentType inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Pedido no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Pedido no encontrado"
+                code: "ORDER_NOT_FOUND"
+        '500':
+          description: Error al guardar el archivo en el servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

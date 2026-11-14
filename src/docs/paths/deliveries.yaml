@@ -224,3 +224,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/deliveries/{id}/proof:
+    post:
+      summary: Subir comprobante de entrega (multipart/form-data)
+      description: |
+        Recibe un archivo de comprobante en el campo **`file`** (`multipart/form-data`), verifica que la entrega exista en MongoDB, almacena el archivo en `uploads/deliveries/proofs` y registra sus metadatos en la entidad `Delivery`.
+      tags:
+        - Deliveries
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID único de la entrega en MongoDB
+          example: "665f1a2b3c4d5e6f7a8b9c20"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Imagen o PDF del comprobante de entrega (PDF, JPG, JPEG, PNG, WEBP — máx. 5 MB)
+                documentType:
+                  type: string
+                  enum: [delivery_proof, user_document, driver_license]
+                  default: delivery_proof
+                  description: Tipo de documento (por defecto delivery_proof)
+                  example: "delivery_proof"
+      responses:
+        '201':
+          description: Comprobante cargado y asociado exitosamente a la entrega
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryProofUploadResponse'
+        '400':
+          description: Archivo faltante, tipo de archivo no permitido, tamaño excedido o documentType inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                ArchivoRequerido:
+                  summary: Falta el archivo en el campo 'file'
+                  value:
+                    status: "error"
+                    message: "El archivo es obligatorio y debe enviarse en el campo \"file\""
+                    code: "FILE_REQUIRED"
+                TipoNoPermitido:
+                  summary: Formato de archivo inválido
+                  value:
+                    status: "error"
+                    message: "Tipo de archivo no permitido. Solo se aceptan PDF, JPG, JPEG, PNG y WEBP"
+                    code: "INVALID_FILE_TYPE"
+        '404':
+          description: Entrega no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Entrega no encontrada"
+                code: "DELIVERY_NOT_FOUND"
+        '500':
+          description: Error al guardar el archivo en el servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

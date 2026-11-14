@@ -1,16 +1,50 @@
 components:
   schemas:
-    UserDocument:
+    FileMetadata:
       type: object
+      description: Metadatos del archivo cargado y almacenado en el servidor (el binario no se guarda en MongoDB)
       properties:
         name:
           type: string
-          description: Nombre o tipo del documento adjunto
-          example: "driver_license"
+          description: Nombre original del archivo (compatibilidad con esquema base)
+          example: "licencia-conducir.pdf"
+        originalName:
+          type: string
+          description: Nombre original del archivo subido por el cliente
+          example: "licencia-conducir.pdf"
+        filename:
+          type: string
+          description: Nombre único generado por el servidor para evitar colisiones
+          example: "user-665f1a2b3c4d5e6f7a8b9c01-1731590000000-482910-licencia-conducir.pdf"
         reference:
           type: string
-          description: Ruta o URL de referencia al documento
-          example: "/docs/licencia-conducir.pdf"
+          description: Ruta relativa del archivo en el servidor (compatibilidad con esquema base)
+          example: "uploads/users/licenses/user-665f1a2b3c4d5e6f7a8b9c01-1731590000000-482910-licencia-conducir.pdf"
+        path:
+          type: string
+          description: Ruta relativa de almacenamiento dentro de la estructura /uploads
+          example: "uploads/users/licenses/user-665f1a2b3c4d5e6f7a8b9c01-1731590000000-482910-licencia-conducir.pdf"
+        mimetype:
+          type: string
+          description: Tipo MIME validado del archivo
+          example: "application/pdf"
+        size:
+          type: integer
+          description: Tamaño del archivo en bytes (máximo 5 MB)
+          example: 24580
+        documentType:
+          type: string
+          enum: [user_document, driver_license, delivery_proof]
+          description: Categoría o tipo de documento dentro de ShipNow
+          example: "driver_license"
+        uploadedAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de carga del archivo
+          example: "2026-11-14T15:00:00.000Z"
+
+    UserDocument:
+      $ref: '#/components/schemas/FileMetadata'
 
     User:
       type: object
@@ -49,8 +83,9 @@ components:
           example: "customer"
         documents:
           type: array
+          description: Lista de metadatos de documentos asociados al usuario
           items:
-            $ref: '#/components/schemas/UserDocument'
+            $ref: '#/components/schemas/FileMetadata'
         createdAt:
           type: string
           format: date-time
@@ -90,7 +125,7 @@ components:
         documents:
           type: array
           items:
-            $ref: '#/components/schemas/UserDocument'
+            $ref: '#/components/schemas/FileMetadata'
 
     UserUpdateInput:
       type: object
@@ -188,6 +223,16 @@ components:
           nullable: true
           description: Referencia a la entrega asociada (si existe)
           example: null
+        proof:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/FileMetadata'
+          description: Último comprobante asociado al pedido
+        proofs:
+          type: array
+          description: Historial de comprobantes asociados al pedido
+          items:
+            $ref: '#/components/schemas/FileMetadata'
         createdAt:
           type: string
           format: date-time
@@ -289,6 +334,16 @@ components:
           format: date-time
           nullable: true
           example: null
+        proof:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/FileMetadata'
+          description: Último comprobante de entrega asociado
+        proofs:
+          type: array
+          description: Lista de comprobantes asociados a la entrega
+          items:
+            $ref: '#/components/schemas/FileMetadata'
         createdAt:
           type: string
           format: date-time
@@ -337,6 +392,39 @@ components:
           type: string
           enum: [low, normal, high]
           example: "high"
+
+    UserDocumentUploadResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Documento de usuario cargado y registrado exitosamente"
+        document:
+          $ref: '#/components/schemas/FileMetadata'
+        user:
+          $ref: '#/components/schemas/User'
+
+    DeliveryProofUploadResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Comprobante de entrega cargado y asociado exitosamente"
+        proof:
+          $ref: '#/components/schemas/FileMetadata'
+        delivery:
+          $ref: '#/components/schemas/Delivery'
+
+    OrderProofUploadResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Comprobante de pedido cargado y asociado exitosamente"
+        proof:
+          $ref: '#/components/schemas/FileMetadata'
+        order:
+          $ref: '#/components/schemas/Order'
 
     Product:
       type: object
@@ -521,6 +609,11 @@ components:
             - CONFLICT_ERROR
             - FORBIDDEN_OPERATION
             - DATABASE_ERROR
+            - FILE_REQUIRED
+            - INVALID_FILE_TYPE
+            - FILE_TOO_LARGE
+            - INVALID_DOCUMENT_TYPE
+            - FILE_STORAGE_ERROR
           description: Código estandarizado del diccionario de errores de la aplicación
           example: "VALIDATION_ERROR"
         details:
