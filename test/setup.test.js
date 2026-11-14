@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import config from '../src/config/env.config.js';
+import logger from '../src/config/logger.js';
 import User from '../src/models/user.model.js';
 import Order from '../src/models/order.model.js';
 import Delivery from '../src/models/delivery.model.js';
@@ -31,11 +32,15 @@ before(async function () {
         serverSelectionTimeoutMS: 3500,
         connectTimeoutMS: 3500
       });
+      logger.info(`[TEST SETUP] Conectado a base de datos de testing: ${config.MONGODB_URI}`);
     }
     await clearTestDatabase();
-  } catch {
-    // Si el entorno de testing no tiene una instancia activa de MongoDB local/Atlas accesible,
-    // activa automáticamente el motor de persistencia de testing aislado en memoria.
+  } catch (error) {
+    // Se notifica explícitamente el motivo por el cual no se pudo conectar a MongoDB externo
+    // antes de activar el motor de persistencia aislado en memoria para las pruebas.
+    logger.warning(
+      `[TEST SETUP] No se pudo conectar a MongoDB (${error.message}). Activando adaptador de persistencia en memoria para ejecutar la suite de tests.`
+    );
     usingInMemoryFallback = true;
     enableInMemoryTestPersistence();
     clearMemoryStores();
@@ -47,5 +52,6 @@ after(async function () {
   await clearTestDatabase();
   if (!usingInMemoryFallback && mongoose.connection.readyState !== 0) {
     await mongoose.disconnect();
+    logger.info('[TEST SETUP] Conexión a base de datos de testing cerrada correctamente.');
   }
 });
