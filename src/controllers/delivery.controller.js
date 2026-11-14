@@ -46,6 +46,19 @@ class DeliveryController {
       next(error);
     }
   }
+
+  async uploadProof(req, res, next) {
+    try {
+      const documentType = req.body?.documentType ?? req.query?.documentType;
+      const result = await deliveryService.uploadProof(req.params.id, {
+        file: req.file,
+        documentType
+      });
+      return res.status(HTTP_STATUS.CREATED).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const deliveryController = new DeliveryController();

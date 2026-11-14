@@ -1,5 +1,24 @@
 import mongoose from 'mongoose';
-import { USER_ROLES } from '../constants/index.js';
+import { USER_ROLES, DOCUMENT_TYPES } from '../constants/index.js';
+
+const userDocumentSchema = new mongoose.Schema({
+  name: { type: String },
+  originalName: { type: String },
+  filename: { type: String },
+  reference: { type: String },
+  path: { type: String },
+  mimetype: { type: String },
+  size: { type: Number },
+  documentType: {
+    type: String,
+    enum: Object.values(DOCUMENT_TYPES),
+    default: DOCUMENT_TYPES.USER_DOCUMENT
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
 
 const userSchema = new mongoose.Schema({
   firstName: {
@@ -29,12 +48,7 @@ const userSchema = new mongoose.Schema({
     default: USER_ROLES.CUSTOMER
   },
   documents: {
-    type: [
-      {
-        name: { type: String },
-        reference: { type: String }
-      }
-    ],
+    type: [userDocumentSchema],
     default: []
   }
 }, {

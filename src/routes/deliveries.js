@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import deliveryController from '../controllers/delivery.controller.js';
+import { uploadProofMiddleware } from '../config/multer.config.js';
 
 const router = Router();
 
@@ -8,5 +9,10 @@ router.get('/:id', (req, res, next) => deliveryController.getById(req, res, next
 router.post('/', (req, res, next) => deliveryController.create(req, res, next));
 router.put('/:id', (req, res, next) => deliveryController.update(req, res, next));
 router.delete('/:id', (req, res, next) => deliveryController.delete(req, res, next));
+
+// Carga de comprobante asociado a una entrega
+router.post('/:id/proof', uploadProofMiddleware, (req, res, next) =>
+  deliveryController.uploadProof(req, res, next)
+);
 
 export default router;

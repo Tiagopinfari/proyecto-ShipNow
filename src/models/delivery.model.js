@@ -1,5 +1,24 @@
 import mongoose from 'mongoose';
-import { DELIVERY_STATUS, DELIVERY_PRIORITY } from '../constants/index.js';
+import { DELIVERY_STATUS, DELIVERY_PRIORITY, DOCUMENT_TYPES } from '../constants/index.js';
+
+const fileMetadataSchema = new mongoose.Schema({
+  name: { type: String },
+  originalName: { type: String },
+  filename: { type: String },
+  reference: { type: String },
+  path: { type: String },
+  mimetype: { type: String },
+  size: { type: Number },
+  documentType: {
+    type: String,
+    enum: Object.values(DOCUMENT_TYPES),
+    default: DOCUMENT_TYPES.DELIVERY_PROOF
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
 
 const deliverySchema = new mongoose.Schema({
   order: {
@@ -29,6 +48,14 @@ const deliverySchema = new mongoose.Schema({
   deliveredAt: {
     type: Date,
     default: null
+  },
+  proof: {
+    type: fileMetadataSchema,
+    default: null
+  },
+  proofs: {
+    type: [fileMetadataSchema],
+    default: []
   }
 }, {
   timestamps: true

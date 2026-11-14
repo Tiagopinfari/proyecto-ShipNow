@@ -7,10 +7,13 @@ import {
   UserNotFoundError,
   InvalidRoleError,
   InvalidStatusError,
-  ValidationError
+  ValidationError,
+  FileRequiredError,
+  InvalidDocumentTypeError
 } from '../utils/errors.js';
 import logger from '../config/logger.js';
-import { USER_ROLES, DELIVERY_STATUS, DELIVERY_PRIORITY } from '../constants/index.js';
+import { persistUploadedFile } from '../config/multer.config.js';
+import { USER_ROLES, DELIVERY_STATUS, DELIVERY_PRIORITY, DOCUMENT_TYPES } from '../constants/index.js';
 
 class DeliveryService {
   async getDeliveries() {
@@ -90,6 +93,49 @@ class DeliveryService {
     }
     logger.info(`Entrega eliminada exitosamente: ID ${id}`);
     return { message: 'Entrega eliminada' };
+  }
+
+  async uploadProof(id, { file, documentType }) {
+    if (!file) {
+      logger.warning(`Intento de subir comprobante a entrega ID ${id} sin archivo`);
+      throw new FileRequiredError('El archivo es obligatorio para registrar un comprobante de entrega');
+    }
+
+    const activeDocType = documentType ? String(documentType).trim() : DOCUMENT_TYPES.DELIVERY_PROOF;
+    if (!Object.values(DOCUMENT_TYPES).includes(activeDocType)) {
+      logger.warning(`Tipo de documento inválido en comprobante de entrega ID ${id}: "${documentType}"`);
+      throw new InvalidDocumentTypeError(
+        `Tipo de documento inválido ("${documentType}"). Valores permitidos: ${Object.values(DOCUMENT_TYPES).join(', ')}`
+      );
+    }
+
+    const delivery = await deliveryRepository.getById(id);
+    if (!delivery) {
+      logger.warning(`Fallo al asociar comprobante: entrega inexistente ID ${id}`);
+      throw new DeliveryNotFoundError('Entrega no encontrada');
+    }
+
+    const metadata = persistUploadedFile({
+      file,
+      documentType: activeDocType,
+      entityPrefix: `delivery-${id}`
+    });
+
+    const currentProofs = Array.isArray(delivery.proofs) ? [...delivery.proofs] : [];
+    currentProofs.push(metadata);
+
+    const updatedDelivery = await deliveryRepository.update(id, {
+      proof: metadata,
+      proofs: currentProofs
+    });
+
+    logger.info(`Comprobante "${metadata.originalName}" asociado exitosamente a la entrega ID ${id}`);
+
+    return {
+      message: 'Comprobante de entrega cargado y asociado exitosamente',
+      proof: metadata,
+      delivery: updatedDelivery
+    };
   }
 }
 

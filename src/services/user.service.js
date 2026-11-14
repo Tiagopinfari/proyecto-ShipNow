@@ -1,12 +1,18 @@
 import userRepository from '../repositories/user.repository.js';
-import { USER_ROLES } from '../constants/index.js';
+import { USER_ROLES, DOCUMENT_TYPES } from '../constants/index.js';
+import logger from '../config/logger.js';
+import { persistUploadedFile } from '../config/multer.config.js';
 import {
   UserNotFoundError,
   ValidationError,
   InvalidRoleError,
   ConflictError,
-  ForbiddenError
+  ForbiddenError,
+  FileRequiredError,
+  InvalidDocumentTypeError
 } from '../utils/errors.js';
+
+const VALID_USER_DOCUMENT_TYPES = Object.values(DOCUMENT_TYPES);
 
 class UserService {
   async getUsers() {
@@ -16,6 +22,7 @@ class UserService {
   async getUserById(id) {
     const user = await userRepository.findById(id);
     if (!user) {
+      logger.warning(`Consulta de usuario inexistente: ID ${id}`);
       throw new UserNotFoundError('Usuario no encontrado');
     }
     return user;
@@ -53,6 +60,7 @@ class UserService {
       documents: userData.documents || []
     });
 
+    logger.info(`Usuario creado exitosamente con ID: ${newUser._id} (email: ${newUser.email})`);
     return newUser;
   }
 
@@ -70,6 +78,47 @@ class UserService {
       throw new UserNotFoundError('Usuario no encontrado');
     }
     return { message: 'Usuario eliminado' };
+  }
+
+  async uploadDocument(id, { file, documentType }) {
+    if (!file) {
+      logger.warning(`Intento de subir documento a usuario ID ${id} sin archivo adjunto`);
+      throw new FileRequiredError('El archivo es obligatorio para registrar un documento de usuario');
+    }
+
+    const activeDocType = documentType ? String(documentType).trim() : DOCUMENT_TYPES.USER_DOCUMENT;
+    if (!VALID_USER_DOCUMENT_TYPES.includes(activeDocType)) {
+      logger.warning(`Tipo de documento inválido enviado para usuario ID ${id}: "${documentType}"`);
+      throw new InvalidDocumentTypeError(
+        `Tipo de documento inválido ("${documentType}"). Valores permitidos: ${VALID_USER_DOCUMENT_TYPES.join(', ')}`
+      );
+    }
+
+    const user = await userRepository.findById(id);
+    if (!user) {
+      logger.warning(`Fallo al subir documento: usuario inexistente ID ${id}`);
+      throw new UserNotFoundError('Usuario no encontrado');
+    }
+
+    const metadata = persistUploadedFile({
+      file,
+      documentType: activeDocType,
+      entityPrefix: `user-${id}`
+    });
+
+    const currentDocuments = Array.isArray(user.documents) ? [...user.documents] : [];
+    currentDocuments.push(metadata);
+
+    const updatedUser = await userRepository.update(id, { documents: currentDocuments });
+    logger.info(
+      `Documento "${metadata.originalName}" (tipo: ${activeDocType}) cargado y asociado exitosamente al usuario ID ${id}`
+    );
+
+    return {
+      message: 'Documento de usuario cargado y registrado exitosamente',
+      document: metadata,
+      user: updatedUser
+    };
   }
 }
 

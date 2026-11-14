@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ORDER_STATUS, DELIVERY_PRIORITY } from '../constants/index.js';
+import { ORDER_STATUS, DELIVERY_PRIORITY, DOCUMENT_TYPES } from '../constants/index.js';
 
 const orderItemSchema = new mongoose.Schema({
   name: {
@@ -15,6 +15,25 @@ const orderItemSchema = new mongoose.Schema({
     type: Number,
     required: [true, 'El precio es obligatorio'],
     min: [0, 'El precio no puede ser negativo']
+  }
+}, { _id: false });
+
+const fileMetadataSchema = new mongoose.Schema({
+  name: { type: String },
+  originalName: { type: String },
+  filename: { type: String },
+  reference: { type: String },
+  path: { type: String },
+  mimetype: { type: String },
+  size: { type: Number },
+  documentType: {
+    type: String,
+    enum: Object.values(DOCUMENT_TYPES),
+    default: DOCUMENT_TYPES.DELIVERY_PROOF
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
   }
 }, { _id: false });
 
@@ -61,6 +80,14 @@ const orderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Delivery',
     default: null
+  },
+  proof: {
+    type: fileMetadataSchema,
+    default: null
+  },
+  proofs: {
+    type: [fileMetadataSchema],
+    default: []
   }
 }, {
   timestamps: true

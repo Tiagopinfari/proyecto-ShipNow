@@ -4,11 +4,14 @@ import {
   OrderNotFoundError,
   UserNotFoundError,
   ValidationError,
-  InvalidStatusError
+  InvalidStatusError,
+  FileRequiredError,
+  InvalidDocumentTypeError
 } from '../utils/errors.js';
 import config from '../config/env.config.js';
 import logger from '../config/logger.js';
-import { ORDER_STATUS, DELIVERY_PRIORITY } from '../constants/index.js';
+import { persistUploadedFile } from '../config/multer.config.js';
+import { ORDER_STATUS, DELIVERY_PRIORITY, DOCUMENT_TYPES } from '../constants/index.js';
 import { createError } from '../utils/apiResponse.js';
 import { ERROR_CODES } from '../utils/errorDictionary.js';
 
@@ -114,6 +117,49 @@ class OrderService {
     }
     logger.info(`Pedido eliminado exitosamente: ID ${id}`);
     return { message: 'Pedido eliminado' };
+  }
+
+  async uploadProof(id, { file, documentType }) {
+    if (!file) {
+      logger.warning(`Intento de subir comprobante a pedido ID ${id} sin archivo`);
+      throw new FileRequiredError('El archivo es obligatorio para registrar un comprobante de pedido');
+    }
+
+    const activeDocType = documentType ? String(documentType).trim() : DOCUMENT_TYPES.DELIVERY_PROOF;
+    if (!Object.values(DOCUMENT_TYPES).includes(activeDocType)) {
+      logger.warning(`Tipo de documento inválido en comprobante de pedido ID ${id}: "${documentType}"`);
+      throw new InvalidDocumentTypeError(
+        `Tipo de documento inválido ("${documentType}"). Valores permitidos: ${Object.values(DOCUMENT_TYPES).join(', ')}`
+      );
+    }
+
+    const order = await orderRepository.getById(id);
+    if (!order) {
+      logger.warning(`Fallo al asociar comprobante: pedido inexistente ID ${id}`);
+      throw new OrderNotFoundError('Pedido no encontrado');
+    }
+
+    const metadata = persistUploadedFile({
+      file,
+      documentType: activeDocType,
+      entityPrefix: `order-${id}`
+    });
+
+    const currentProofs = Array.isArray(order.proofs) ? [...order.proofs] : [];
+    currentProofs.push(metadata);
+
+    const updatedOrder = await orderRepository.update(id, {
+      proof: metadata,
+      proofs: currentProofs
+    });
+
+    logger.info(`Comprobante "${metadata.originalName}" asociado exitosamente al pedido ID ${id}`);
+
+    return {
+      message: 'Comprobante de pedido cargado y asociado exitosamente',
+      proof: metadata,
+      order: updatedOrder
+    };
   }
 }
 
