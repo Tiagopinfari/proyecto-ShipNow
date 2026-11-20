@@ -4,7 +4,7 @@ paths:
       summary: Ejecutar prueba de todos los niveles del Logger (Herramienta interna)
       description: |
         **Nota importante:** Este endpoint **no representa una funcionalidad de negocio de ShipNow**, sino una **herramienta interna de validación técnica**.
-        Su propósito es disparar secuencialmente logs en los 6 niveles configurados en Winston (`debug`, `http`, `info`, `warning`, `error` y `fatal`) para verificar el formato en consola según el entorno (`NODE_ENV`) y la persistencia selectiva de `error` y `fatal` en `/logs/error.log`.
+        En el entorno de producción (`NODE_ENV=production`) se encuentra restringido por defecto con `403 FORBIDDEN_OPERATION` salvo que `ENABLE_INTERNAL_ENDPOINTS_IN_PROD=true`.
       tags:
         - Logger
       responses:
@@ -18,6 +18,16 @@ paths:
                 status: "success"
                 message: "Logs de prueba ejecutados correctamente en todos los niveles (debug, http, info, warning, error, fatal)"
                 levelsTested: ["debug", "http", "info", "warning", "error", "fatal"]
+        '403':
+          description: Endpoint interno restringido en entorno de producción
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                message: "Este endpoint de herramienta interna está deshabilitado en el entorno de producción por seguridad"
+                code: "FORBIDDEN_OPERATION"
         '500':
           description: Error interno del servidor
           content:
@@ -29,7 +39,7 @@ paths:
     get:
       summary: Ejecutar prueba del Logger (Alias directo en raíz)
       description: |
-        **Nota importante:** Alias directo de `GET /api/loggerTest`. Este endpoint **no representa una funcionalidad de negocio de ShipNow**, sino una **herramienta interna de validación técnica** para disparar y verificar todos los niveles de Winston (`debug`, `http`, `info`, `warning`, `error`, `fatal`).
+        **Nota importante:** Alias directo de `GET /api/loggerTest`. Herramienta interna de validación técnica restringida en producción salvo `ENABLE_INTERNAL_ENDPOINTS_IN_PROD=true`.
       tags:
         - Logger
       responses:
@@ -39,12 +49,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoggerTestResponse'
-              example:
-                status: "success"
-                message: "Logs de prueba ejecutados correctamente en todos los niveles (debug, http, info, warning, error, fatal)"
-                levelsTested: ["debug", "http", "info", "warning", "error", "fatal"]
-        '500':
-          description: Error interno del servidor
+        '403':
+          description: Endpoint interno restringido en entorno de producción
           content:
             application/json:
               schema:
@@ -52,8 +58,9 @@ paths:
 
   /api/health:
     get:
-      summary: Verificar estado de salud de la API (Health Check)
-      description: Herramienta interna de monitoreo que devuelve el estado operativo del servidor, timestamp actual y entorno activo.
+      summary: Verificar estado de salud de la API (Health Check seguro)
+      description: |
+        Endpoint de monitoreo que devuelve el estado operativo del servidor (`status`), entorno activo (`environment`), tiempo de actividad en segundos (`uptime`) y marca temporal (`timestamp`), **sin exponer secretos ni información sensible**.
       tags:
         - Logger
       responses:
@@ -67,21 +74,22 @@ paths:
                   status:
                     type: string
                     example: "ok"
-                  timestamp:
-                    type: string
-                    format: date-time
-                    example: "2026-11-07T15:00:00.000Z"
                   environment:
                     type: string
                     example: "development"
-                  secret:
+                  uptime:
+                    type: number
+                    description: Segundos de actividad continua del proceso Node.js
+                    example: 142.35
+                  timestamp:
                     type: string
-                    example: "mi_clave_secreta"
+                    format: date-time
+                    example: "2026-11-20T15:00:00.000Z"
 
   /health:
     get:
       summary: Verificar estado de salud del servidor (Alias Health Check)
-      description: Alias directo en raíz para consultar el estado operativo del servidor y el entorno activo.
+      description: Alias directo en raíz para consultar el estado operativo del servidor, entorno, uptime y timestamp sin exponer datos sensibles.
       tags:
         - Logger
       responses:
@@ -95,10 +103,13 @@ paths:
                   status:
                     type: string
                     example: "ok"
-                  timestamp:
-                    type: string
-                    format: date-time
-                    example: "2026-11-07T15:00:00.000Z"
                   environment:
                     type: string
                     example: "development"
+                  uptime:
+                    type: number
+                    example: 142.35
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-11-20T15:00:00.000Z"

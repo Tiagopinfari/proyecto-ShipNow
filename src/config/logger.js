@@ -4,7 +4,7 @@ import config from './env.config.js';
 import path from 'path';
 import fs from 'fs';
 
-// Asegurar existencia de la carpeta logs
+// Asegurar existencia de la carpeta logs al arranque del módulo
 const logsDir = path.resolve(process.cwd(), 'logs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
@@ -38,18 +38,21 @@ const logFormat = winston.format.printf(({ timestamp, level, message }) => {
 });
 
 const isProd = config.isProduction;
+const activeConsoleLevel = config.LOG_LEVEL && config.LOG_LEVEL in customLevels.levels
+  ? (isProd && ['debug', 'http'].includes(config.LOG_LEVEL) ? 'info' : config.LOG_LEVEL)
+  : (isProd ? 'info' : 'debug');
 
 const logger = winston.createLogger({
   levels: customLevels.levels,
-  level: isProd ? 'info' : 'debug',
+  level: activeConsoleLevel,
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     logFormat
   ),
   transports: [
-    // 1. Salida por consola: en dev muestra desde debug; en prod desde info
+    // 1. Salida por consola: en dev muestra desde debug (o LOG_LEVEL); en prod desde info
     new winston.transports.Console({
-      level: isProd ? 'info' : 'debug',
+      level: activeConsoleLevel,
       format: winston.format.combine(
         winston.format.colorize({ all: true }),
         winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
