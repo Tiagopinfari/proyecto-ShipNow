@@ -10,7 +10,8 @@ import {
 } from '../utils/errors.js';
 import config from '../config/env.config.js';
 import logger from '../config/logger.js';
-import { persistUploadedFile } from '../config/multer.config.js';
+import { finalizeUploadedFileAsync, removeUploadedFileAsync } from '../config/multer.config.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 import { ORDER_STATUS, DELIVERY_PRIORITY, DOCUMENT_TYPES } from '../constants/index.js';
 import { createError } from '../utils/apiResponse.js';
 import { ERROR_CODES } from '../utils/errorDictionary.js';
@@ -26,8 +27,29 @@ export const calculateShippingCost = ({ isProduction, shipmentValue, apiKey }) =
 };
 
 class OrderService {
-  async getOrders() {
-    return await orderRepository.getAll();
+  async getOrders(queryParams = {}) {
+    const { page, limit, skip } = parsePaginationParams(queryParams);
+    const filter = {};
+
+    if (queryParams.status) {
+      if (!Object.values(ORDER_STATUS).includes(queryParams.status)) {
+        throw new InvalidStatusError('Filtro de estado de pedido inválido');
+      }
+      filter.status = queryParams.status;
+    }
+
+    if (queryParams.priority) {
+      if (!Object.values(DELIVERY_PRIORITY).includes(queryParams.priority)) {
+        throw new InvalidStatusError('Filtro de prioridad de pedido inválida');
+      }
+      filter.priority = queryParams.priority;
+    }
+
+    if (queryParams.customer) {
+      filter.customer = queryParams.customer;
+    }
+
+    return await orderRepository.getAll(filter, { limit, skip, page });
   }
 
   async getOrderById(id) {
@@ -75,7 +97,7 @@ class OrderService {
     const shippingCost = calculateShippingCost({
       isProduction: config.isProduction,
       shipmentValue: declaredValue,
-      apiKey: config.SHIPPING_API_KEY || config.JWT_SECRET
+      apiKey: config.SHIPPING_API_KEY
     });
 
     const createdOrder = await orderRepository.create({
@@ -127,19 +149,28 @@ class OrderService {
 
     const activeDocType = documentType ? String(documentType).trim() : DOCUMENT_TYPES.DELIVERY_PROOF;
     if (!Object.values(DOCUMENT_TYPES).includes(activeDocType)) {
+      await removeUploadedFileAsync(file);
       logger.warning(`Tipo de documento inválido en comprobante de pedido ID ${id}: "${documentType}"`);
       throw new InvalidDocumentTypeError(
         `Tipo de documento inválido ("${documentType}"). Valores permitidos: ${Object.values(DOCUMENT_TYPES).join(', ')}`
       );
     }
 
-    const order = await orderRepository.getById(id);
+    let order;
+    try {
+      order = await orderRepository.getById(id);
+    } catch (err) {
+      await removeUploadedFileAsync(file);
+      throw err;
+    }
+
     if (!order) {
+      await removeUploadedFileAsync(file);
       logger.warning(`Fallo al asociar comprobante: pedido inexistente ID ${id}`);
       throw new OrderNotFoundError('Pedido no encontrado');
     }
 
-    const metadata = persistUploadedFile({
+    const metadata = await finalizeUploadedFileAsync({
       file,
       documentType: activeDocType,
       entityPrefix: `order-${id}`

@@ -1,7 +1,8 @@
 import userRepository from '../repositories/user.repository.js';
 import { USER_ROLES, DOCUMENT_TYPES } from '../constants/index.js';
 import logger from '../config/logger.js';
-import { persistUploadedFile } from '../config/multer.config.js';
+import { finalizeUploadedFileAsync, removeUploadedFileAsync } from '../config/multer.config.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 import {
   UserNotFoundError,
   ValidationError,
@@ -15,8 +16,22 @@ import {
 const VALID_USER_DOCUMENT_TYPES = Object.values(DOCUMENT_TYPES);
 
 class UserService {
-  async getUsers() {
-    return await userRepository.findAll();
+  async getUsers(queryParams = {}) {
+    const { page, limit, skip } = parsePaginationParams(queryParams);
+    const filter = {};
+
+    if (queryParams.role) {
+      if (!Object.values(USER_ROLES).includes(queryParams.role)) {
+        throw new InvalidRoleError('Filtro de rol de usuario inválido');
+      }
+      filter.role = queryParams.role;
+    }
+
+    if (queryParams.email) {
+      filter.email = String(queryParams.email).toLowerCase().trim();
+    }
+
+    return await userRepository.findAll(filter, { limit, skip, page });
   }
 
   async getUserById(id) {
@@ -88,19 +103,28 @@ class UserService {
 
     const activeDocType = documentType ? String(documentType).trim() : DOCUMENT_TYPES.USER_DOCUMENT;
     if (!VALID_USER_DOCUMENT_TYPES.includes(activeDocType)) {
+      await removeUploadedFileAsync(file);
       logger.warning(`Tipo de documento inválido enviado para usuario ID ${id}: "${documentType}"`);
       throw new InvalidDocumentTypeError(
         `Tipo de documento inválido ("${documentType}"). Valores permitidos: ${VALID_USER_DOCUMENT_TYPES.join(', ')}`
       );
     }
 
-    const user = await userRepository.findById(id);
+    let user;
+    try {
+      user = await userRepository.findById(id);
+    } catch (err) {
+      await removeUploadedFileAsync(file);
+      throw err;
+    }
+
     if (!user) {
+      await removeUploadedFileAsync(file);
       logger.warning(`Fallo al subir documento: usuario inexistente ID ${id}`);
       throw new UserNotFoundError('Usuario no encontrado');
     }
 
-    const metadata = persistUploadedFile({
+    const metadata = await finalizeUploadedFileAsync({
       file,
       documentType: activeDocType,
       entityPrefix: `user-${id}`

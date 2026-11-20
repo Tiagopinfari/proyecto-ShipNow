@@ -12,12 +12,38 @@ import {
   InvalidDocumentTypeError
 } from '../utils/errors.js';
 import logger from '../config/logger.js';
-import { persistUploadedFile } from '../config/multer.config.js';
+import { finalizeUploadedFileAsync, removeUploadedFileAsync } from '../config/multer.config.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 import { USER_ROLES, DELIVERY_STATUS, DELIVERY_PRIORITY, DOCUMENT_TYPES } from '../constants/index.js';
 
 class DeliveryService {
-  async getDeliveries() {
-    return await deliveryRepository.getAll();
+  async getDeliveries(queryParams = {}) {
+    const { page, limit, skip } = parsePaginationParams(queryParams);
+    const filter = {};
+
+    if (queryParams.status) {
+      if (!Object.values(DELIVERY_STATUS).includes(queryParams.status)) {
+        throw new InvalidStatusError('Filtro de estado de entrega inválido');
+      }
+      filter.status = queryParams.status;
+    }
+
+    if (queryParams.priority) {
+      if (!Object.values(DELIVERY_PRIORITY).includes(queryParams.priority)) {
+        throw new InvalidStatusError('Filtro de prioridad de entrega inválida');
+      }
+      filter.priority = queryParams.priority;
+    }
+
+    if (queryParams.driver) {
+      filter.driver = queryParams.driver;
+    }
+
+    if (queryParams.order) {
+      filter.order = queryParams.order;
+    }
+
+    return await deliveryRepository.getAll(filter, { limit, skip, page });
   }
 
   async getDeliveryById(id) {
@@ -103,19 +129,28 @@ class DeliveryService {
 
     const activeDocType = documentType ? String(documentType).trim() : DOCUMENT_TYPES.DELIVERY_PROOF;
     if (!Object.values(DOCUMENT_TYPES).includes(activeDocType)) {
+      await removeUploadedFileAsync(file);
       logger.warning(`Tipo de documento inválido en comprobante de entrega ID ${id}: "${documentType}"`);
       throw new InvalidDocumentTypeError(
         `Tipo de documento inválido ("${documentType}"). Valores permitidos: ${Object.values(DOCUMENT_TYPES).join(', ')}`
       );
     }
 
-    const delivery = await deliveryRepository.getById(id);
+    let delivery;
+    try {
+      delivery = await deliveryRepository.getById(id);
+    } catch (err) {
+      await removeUploadedFileAsync(file);
+      throw err;
+    }
+
     if (!delivery) {
+      await removeUploadedFileAsync(file);
       logger.warning(`Fallo al asociar comprobante: entrega inexistente ID ${id}`);
       throw new DeliveryNotFoundError('Entrega no encontrada');
     }
 
-    const metadata = persistUploadedFile({
+    const metadata = await finalizeUploadedFileAsync({
       file,
       documentType: activeDocType,
       entityPrefix: `delivery-${id}`

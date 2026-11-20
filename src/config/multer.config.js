@@ -35,7 +35,7 @@ export const UPLOAD_SUBFOLDERS = Object.freeze({
   [DOCUMENT_TYPES.DELIVERY_PROOF]: 'uploads/deliveries/proofs'
 });
 
-const ensureUploadDirectories = () => {
+const ensureUploadDirectoriesSync = () => {
   Object.values(UPLOAD_SUBFOLDERS).forEach((relFolder) => {
     const absFolder = path.resolve(process.cwd(), relFolder);
     if (!fs.existsSync(absFolder)) {
@@ -44,7 +44,7 @@ const ensureUploadDirectories = () => {
   });
 };
 
-ensureUploadDirectories();
+ensureUploadDirectoriesSync();
 
 const sanitizeBaseName = (originalName) => {
   const ext = path.extname(originalName).toLowerCase();
@@ -60,6 +60,40 @@ export const buildGeneratedFilename = (prefix, originalName) => {
   const { base, ext } = sanitizeBaseName(originalName);
   const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
   return `${prefix}-${uniqueSuffix}-${base}${ext}`;
+};
+
+const resolveTargetRelativeFolder = (req, defaultDocType) => {
+  const rawType = req.body?.documentType ?? req.query?.documentType ?? defaultDocType;
+  const normalizedType = String(rawType || defaultDocType).trim();
+  return UPLOAD_SUBFOLDERS[normalizedType] || UPLOAD_SUBFOLDERS[defaultDocType] || UPLOAD_SUBFOLDERS[DOCUMENT_TYPES.USER_DOCUMENT];
+};
+
+/**
+ * Configuración nativa de multer.diskStorage que define dinámicamente
+ * la subcarpeta de destino y el nombre único generado para cada archivo.
+ */
+export const createDiskStorage = (defaultDocType = DOCUMENT_TYPES.USER_DOCUMENT, entityPrefixName = 'doc') => {
+  return multer.diskStorage({
+    destination: (req, file, cb) => {
+      try {
+        const relFolder = resolveTargetRelativeFolder(req, defaultDocType);
+        const absFolder = path.resolve(process.cwd(), relFolder);
+        fs.promises.mkdir(absFolder, { recursive: true })
+          .then(() => {
+            req._uploadRelativeFolder = relFolder;
+            cb(null, absFolder);
+          })
+          .catch((err) => cb(new FileStorageError(`No se pudo preparar el directorio de destino: ${err.message}`)));
+      } catch (err) {
+        cb(new FileStorageError(`Error al determinar carpeta de destino: ${err.message}`));
+      }
+    },
+    filename: (req, file, cb) => {
+      const entityId = req.params?.id || 'general';
+      const generatedName = buildGeneratedFilename(`${entityPrefixName}-${entityId}`, file.originalname);
+      cb(null, generatedName);
+    }
+  });
 };
 
 const fileFilter = (req, file, cb) => {
@@ -81,21 +115,37 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
-// Almacenamiento en memoria previo a la validación de negocio para no dejar archivos huérfanos en disco
-const memoryUploader = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: MAX_FILE_SIZE
-  },
-  fileFilter
-});
+/**
+ * Elimina de forma asíncrona (sin bloquear el Event Loop) un archivo temporal en disco
+ * cuando una validación posterior de negocio falla (ej. usuario o entrega inexistente).
+ */
+export const removeUploadedFileAsync = async (file) => {
+  if (file && file.path) {
+    try {
+      await fs.promises.unlink(file.path);
+    } catch {
+      // Si el archivo ya no existe no requiere acción adicional
+    }
+  }
+};
 
 /**
- * Middleware centralizado para procesar un único archivo multipart/form-data
- * y transformar cualquier error de Multer en un error tipado del dominio.
+ * Middleware centralizado con multer.diskStorage para procesar un único archivo
+ * multipart/form-data y transformar errores de Multer en errores tipados del dominio.
  */
-export const createSingleUploadMiddleware = (fieldName = 'file') => {
-  const uploadSingle = memoryUploader.single(fieldName);
+export const createSingleUploadMiddleware = (
+  fieldName = 'file',
+  { defaultDocType = DOCUMENT_TYPES.USER_DOCUMENT, entityPrefix = 'doc' } = {}
+) => {
+  const uploader = multer({
+    storage: createDiskStorage(defaultDocType, entityPrefix),
+    limits: {
+      fileSize: MAX_FILE_SIZE
+    },
+    fileFilter
+  });
+
+  const uploadSingle = uploader.single(fieldName);
 
   return (req, res, next) => {
     uploadSingle(req, res, (err) => {
@@ -130,20 +180,24 @@ export const createSingleUploadMiddleware = (fieldName = 'file') => {
 };
 
 /**
- * Persiste el archivo ya validado en la subcarpeta correspondiente al tipo de documento
- * y devuelve el objeto de metadatos normalizado para almacenar en MongoDB.
+ * Normaliza y reubica (si el documentType del body difiere del default) el archivo
+ * almacenado por diskStorage de forma asíncrona (no bloqueante) y devuelve sus metadatos.
  */
-export const persistUploadedFile = ({ file, documentType, entityPrefix = 'doc' }) => {
+export const finalizeUploadedFileAsync = async ({ file, documentType, entityPrefix = 'doc' }) => {
   try {
-    ensureUploadDirectories();
     const targetRelativeFolder = UPLOAD_SUBFOLDERS[documentType] || UPLOAD_SUBFOLDERS[DOCUMENT_TYPES.USER_DOCUMENT];
     const targetAbsFolder = path.resolve(process.cwd(), targetRelativeFolder);
+    await fs.promises.mkdir(targetAbsFolder, { recursive: true });
 
-    const filename = buildGeneratedFilename(entityPrefix, file.originalname);
-    const absFilePath = path.join(targetAbsFolder, filename);
+    const filename = file.filename || buildGeneratedFilename(entityPrefix, file.originalname);
+    const desiredAbsPath = path.join(targetAbsFolder, filename);
     const relativeFilePath = path.posix.join(targetRelativeFolder.replace(/\\/g, '/'), filename);
 
-    fs.writeFileSync(absFilePath, file.buffer);
+    if (file.path && path.resolve(file.path) !== path.resolve(desiredAbsPath)) {
+      await fs.promises.rename(file.path, desiredAbsPath);
+    } else if (!file.path && file.buffer) {
+      await fs.promises.writeFile(desiredAbsPath, file.buffer);
+    }
 
     return {
       name: file.originalname,
@@ -157,21 +211,31 @@ export const persistUploadedFile = ({ file, documentType, entityPrefix = 'doc' }
       uploadedAt: new Date()
     };
   } catch (error) {
-    logger.error(`Error al guardar archivo en el servidor: ${error.message}`);
+    await removeUploadedFileAsync(file);
+    logger.error(`Error al procesar el archivo en el servidor: ${error.message}`);
     throw new FileStorageError(`Error al almacenar el archivo en el servidor: ${error.message}`);
   }
 };
 
-export const uploadUserDocumentMiddleware = createSingleUploadMiddleware('file');
-export const uploadProofMiddleware = createSingleUploadMiddleware('file');
+export const uploadUserDocumentMiddleware = createSingleUploadMiddleware('file', {
+  defaultDocType: DOCUMENT_TYPES.USER_DOCUMENT,
+  entityPrefix: 'user'
+});
+
+export const uploadProofMiddleware = createSingleUploadMiddleware('file', {
+  defaultDocType: DOCUMENT_TYPES.DELIVERY_PROOF,
+  entityPrefix: 'proof'
+});
 
 export default {
   MAX_FILE_SIZE,
   ALLOWED_MIME_TYPES,
   ALLOWED_EXTENSIONS,
   UPLOAD_SUBFOLDERS,
+  createDiskStorage,
   createSingleUploadMiddleware,
   uploadUserDocumentMiddleware,
   uploadProofMiddleware,
-  persistUploadedFile
+  finalizeUploadedFileAsync,
+  removeUploadedFileAsync
 };
