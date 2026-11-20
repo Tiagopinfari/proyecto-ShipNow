@@ -4,7 +4,7 @@ import { HTTP_STATUS } from '../constants/index.js';
 class UserController {
   async getAll(req, res, next) {
     try {
-      const users = await userService.getUsers();
+      const users = await userService.getUsers(req.query);
       return res.status(HTTP_STATUS.OK).json(users);
     } catch (error) {
       next(error);

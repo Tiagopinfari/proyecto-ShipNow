@@ -2,6 +2,7 @@ import productRepository from '../repositories/product.repository.js';
 import { PRODUCT_STATUS } from '../constants/index.js';
 import config from '../config/env.config.js';
 import logger from '../config/logger.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 import {
   ProductNotFoundError,
   ValidationError,
@@ -17,11 +18,22 @@ const emailProvider = {
 };
 
 class ProductService {
-  async getProducts({ all = false } = {}) {
-    if (all === true || all === 'true') {
-      return await productRepository.findAll();
+  async getProducts(queryParams = {}) {
+    const { page, limit, skip } = parsePaginationParams(queryParams);
+    const { all = false, category } = queryParams;
+    const filter = {};
+
+    if (category) {
+      filter.category = String(category).trim();
     }
-    return await productRepository.findAvailable();
+
+    if (all === true || all === 'true') {
+      return await productRepository.findAll(filter, { limit, skip, page });
+    }
+
+    filter.stock = { $gt: 0 };
+    filter.status = PRODUCT_STATUS.AVAILABLE;
+    return await productRepository.findAll(filter, { limit, skip, page });
   }
 
   async getProductById(id) {

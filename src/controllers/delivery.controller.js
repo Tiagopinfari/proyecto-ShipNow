@@ -4,7 +4,7 @@ import { HTTP_STATUS } from '../constants/index.js';
 class DeliveryController {
   async getAll(req, res, next) {
     try {
-      const deliveries = await deliveryService.getDeliveries();
+      const deliveries = await deliveryService.getDeliveries(req.query);
       return res.status(HTTP_STATUS.OK).json(deliveries);
     } catch (error) {
       next(error);

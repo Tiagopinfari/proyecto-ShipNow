@@ -1,13 +1,31 @@
 import User from '../models/user.model.js';
+import { DEFAULT_LIMIT, MAX_LIMIT } from '../utils/pagination.js';
 
 class UserRepository {
   async findAll(filter = {}, options = {}) {
-    const { projection = null, sort = { createdAt: -1 } } = options;
-    return await User.find(filter, projection).sort(sort).exec();
+    const {
+      projection = null,
+      sort = { createdAt: -1 },
+      limit = DEFAULT_LIMIT,
+      skip = 0
+    } = options;
+
+    const safeLimit = Math.min(Math.max(1, Number(limit) || DEFAULT_LIMIT), MAX_LIMIT);
+    const safeSkip = Math.max(0, Number(skip) || 0);
+
+    return await User.find(filter, projection)
+      .sort(sort)
+      .skip(safeSkip)
+      .limit(safeLimit)
+      .exec();
   }
 
-  async getAll(filter = {}) {
-    return await this.findAll(filter);
+  async getAll(filter = {}, options = {}) {
+    return await this.findAll(filter, options);
+  }
+
+  async count(filter = {}) {
+    return await User.countDocuments(filter);
   }
 
   async findById(id, projection = null) {

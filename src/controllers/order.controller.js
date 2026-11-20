@@ -4,7 +4,7 @@ import { HTTP_STATUS } from '../constants/index.js';
 class OrderController {
   async getAll(req, res, next) {
     try {
-      const orders = await orderService.getOrders();
+      const orders = await orderService.getOrders(req.query);
       return res.status(HTTP_STATUS.OK).json(orders);
     } catch (error) {
       next(error);
