@@ -1,0 +1,29 @@
+# Dependencias locales
+node_modules
+npm-debug.log*
+
+# Archivos de variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Control de versiones
+.git
+.gitignore
+
+# Registros y archivos subidos localmente
+logs
+logs/*
+*.log
+uploads
+uploads/*
+
+# Reportes de cobertura, tests y archivos temporales
+coverage
+.nyc_output
+test
+docs-clase
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp

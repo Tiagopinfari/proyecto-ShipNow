@@ -38,6 +38,8 @@ const matchesFilter = (item, filter = {}) => {
 const createChainableQuery = (getResultFn) => {
   const query = {
     _populateFields: [],
+    _skipCount: 0,
+    _limitCount: null,
     populate(field) {
       this._populateFields.push(field);
       return this;
@@ -45,11 +47,23 @@ const createChainableQuery = (getResultFn) => {
     sort() {
       return this;
     },
-    limit() {
+    skip(n) {
+      this._skipCount = Number(n) || 0;
+      return this;
+    },
+    limit(n) {
+      this._limitCount = Number(n);
       return this;
     },
     async exec() {
-      return await getResultFn(this._populateFields);
+      const all = await getResultFn(this._populateFields);
+      if (!Array.isArray(all)) return all;
+      const start = Math.max(0, this._skipCount);
+      const sliced = all.slice(start);
+      if (this._limitCount !== null && !isNaN(this._limitCount) && this._limitCount >= 0) {
+        return sliced.slice(0, this._limitCount);
+      }
+      return sliced;
     },
     then(resolve, reject) {
       return this.exec().then(resolve, reject);

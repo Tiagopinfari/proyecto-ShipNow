@@ -1,21 +1,21 @@
 # ShipNow API — Backend 3 (Coderhouse)
 
-API RESTful profesional de logística para **ShipNow**, desarrollada bajo arquitectura en 3 capas (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque, módulo de mocking con Faker, capa centralizada de manejo de errores, sistema profesional de logging con Winston, documentación interactiva con Swagger / OpenAPI 3.0, suite de testing funcional con Mocha, Chai y Supertest, y **gestión profesional de carga de archivos, documentos y comprobantes con Multer** (Pre-entrega Módulo 7).
+API RESTful profesional de logística para **ShipNow**, desarrollada bajo arquitectura en 3 capas (**Controller — Service — Repository**), validación estricta de variables de entorno al arranque, módulo de mocking con Faker, capa centralizada de manejo de errores, sistema profesional de logging con Winston, documentación interactiva con Swagger / OpenAPI 3.0, suite de testing funcional con Mocha, Chai y Supertest, carga de archivos con `multer.diskStorage`, y **optimización de performance, preparación para producción y contenerización con Docker** (Pre-entrega Módulo 8).
 
 ---
 
 ## 🏛️ Arquitectura del Sistema
 
-El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad (separando `src/app.js` de `src/server.js`), independencia de la base de datos, observabilidad mediante logs, gestión de archivos en disco con metadatos en MongoDB y documentación OpenAPI modular:
+El sistema implementa el patrón de capas desacopladas asegurando alta cohesión, testeabilidad (separando `src/app.js` de `src/server.js`), paginación y filtrado en repositorios, operaciones asíncronas no bloqueantes en el Event Loop, y protección de endpoints internos en producción:
 
 ```text
-[ Cliente HTTP / Navegador / Supertest ]
+[ Cliente HTTP / Navegador / Supertest / Contenedor Docker ]
        │
-       ├───► GET /api/docs      ──► [ Swagger UI ] (src/config/swagger.js + src/docs/**/*.yaml)
-       ├───► GET /api/docs.json ──► [ OpenAPI 3.0.3 Spec en JSON ]
+       ├───► GET /api/health    ──► [ Health Check Seguro ] (status, environment, uptime, timestamp)
+       ├───► GET /api/docs      ──► [ Swagger UI ] (protegido en prod por swaggerProdGuard)
        │
        ▼
-  [ src/app.js ]           ──► Instancia Express desacoplada del puerto HTTP (importable por Supertest)
+  [ src/app.js ]           ──► Instancia Express con límite de payload (100kb)
        │
        ▼
  [ httpLogger Middleware ] ──► Registra peticiones HTTP con Winston (método, URL, status, duración)
@@ -23,156 +23,191 @@ El sistema implementa el patrón de capas desacopladas asegurando alta cohesión
        ▼
  [ Router ]                ──► Enrutamiento declarativo limpio (src/routes/*.js)
        │
-       ├───► [ Multer Middleware ] ──► Validación de campo, formato MIME/extensión y tamaño (src/config/multer.config.js)
+       ├───► [ internalEndpointGuard ] ──► Protege /api/mocks y /api/loggerTest en producción
+       ├───► [ Multer diskStorage ]    ──► Almacenamiento en disco asíncrono (src/config/multer.config.js)
        │
        ▼
 [ Controller ]             ──► Manejo de req/res. Delega errores en next(error).
        │
        ▼
- [ Service ]               ──► Reglas de negocio, almacenamiento en /uploads y asociación de metadatos.
-       │
-       ├───► [ Mocks Generator ] ──► Generación de datos simulados en memoria con Faker.
+ [ Service ]               ──► Reglas de negocio, paginación (parsePaginationParams) y validaciones.
        │
        ▼
-[ Repository ]             ──► Único componente que interactúa con Mongoose / MongoDB.
+[ Repository ]             ──► Consultas acotadas con .find(filter).sort().skip().limit().
        │
        ▼
   [ Model ]                ──► Esquemas de datos Mongoose con validaciones nativas.
-
-─────────────────────────────────────────────────────────────────────────────
-[ CAPA CENTRALIZADA DE GESTIÓN Y LOGS DE ERRORES ]
-─────────────────────────────────────────────────────────────────────────────
-notFoundHandler (404) ──► logger.warning() ──► next(RouteNotFoundError)
-                                                        │
-                                                        ▼
-errorHandler (Global)  ──► logger.warning() [4xx]  ──► errorResponse (JSON uniforme)
-                       ──► logger.error()   [5xx]
-                       ──► logger.fatal()   [crítico]
 ```
+
+---
+
+## ⚡ Performance, Escalabilidad, Producción y Docker (Pre-entrega Módulo 8)
+
+### 1. Buenas Prácticas de Performance y Escalabilidad
+
+- **Paginación, Límites y Filtros en Listados:**
+  Ningún endpoint devuelve la colección completa sin control. Todos los listados (`GET /api/users`, `GET /api/orders`, `GET /api/deliveries`, `GET /api/products`) implementan paginación mediante [`src/utils/pagination.js`](src/utils/pagination.js) (`page=1`, `limit=20` por defecto, tope máximo `MAX_LIMIT = 100`) y filtros por campos indexables:
+  - `GET /api/users?page=1&limit=20&role=driver&email=...`
+  - `GET /api/orders?page=1&limit=20&status=in_transit&priority=high&customer=...`
+  - `GET /api/deliveries?page=1&limit=20&status=assigned&priority=normal&driver=...&order=...`
+  - `GET /api/products?page=1&limit=20&category=perifericos&all=true`
+- **Control de Payloads y Event Loop No Bloqueante:**
+  - Los parsers `express.json({ limit: '100kb' })` y `express.urlencoded({ limit: '100kb' })` limitan el tamaño de los cuerpos JSON para prevenir saturación de memoria.
+  - La gestión de archivos con Multer en [`src/config/multer.config.js`](src/config/multer.config.js) utiliza **`multer.diskStorage`** nativo combinado con operaciones asíncronas (`fs.promises.mkdir`, `fs.promises.rename`, `fs.promises.unlink`) para no bloquear el Event Loop de Node.js en tiempo de ejecución.
+
+---
+
+### 2. Preparación para Producción y Variables de Entorno
+
+La aplicación no contiene valores sensibles ni secretos harcodeados en el código. Al iniciar, [`src/config/env.config.js`](src/config/env.config.js) ejecuta `validateEnvVariables()` y **aborta inmediatamente el arranque con un mensaje de error claro si falta cualquiera de las variables críticas**.
+
+#### Variables de Entorno Requeridas (`.env.example`)
+
+| Variable | Obligatoria | Descripción | Ejemplo |
+| :--- | :---: | :--- | :--- |
+| **`PORT`** | Sí | Puerto HTTP en el que escucha el servidor (y expone Docker). | `3000` |
+| **`NODE_ENV`** | Sí | Entorno de ejecución (`development`, `test`, `production`). | `development` |
+| **`MONGODB_URI`** | Sí | URI de conexión a MongoDB para desarrollo o producción. | `mongodb://127.0.0.1:27017/shipnow` |
+| **`MONGODB_TEST_URI`**| En test | URI de base de datos separada exclusiva para testing. | `mongodb://127.0.0.1:27017/shipnow_test` |
+| **`JWT_SECRET`** | Sí | Clave secreta para firma y seguridad de tokens. | `tu_clave_secreta_jwt` |
+| **`SHIPPING_API_KEY`**| Sí | API Key del servicio de cotización logística. | `tu_shipping_api_key` |
+| **`EXTERNAL_SHIPPING_API_URL`** | No | URL del servicio externo de tarifas de envío. | `https://api.shipping.shipnow.internal/v1/rates` |
+| **`LOG_LEVEL`** | No | Nivel máximo de logs en consola (`debug` en dev, `info` en prod). | `debug` |
+| **`ENABLE_SWAGGER_IN_PROD`** | No | Habilita (`true`) o restringe (`false`) Swagger UI en producción. | `false` |
+| **`ENABLE_INTERNAL_ENDPOINTS_IN_PROD`** | No | Habilita (`true`) o restringe (`false`) Mocks y LoggerTest en producción. | `false` |
+
+#### 🩺 Health Check Seguro (`GET /api/health` y `GET /health`)
+Devuelve exclusivamente información operativa segura sin exponer secretos, claves ni URIs:
+```json
+{
+  "status": "ok",
+  "environment": "production",
+  "uptime": 128.45,
+  "timestamp": "2026-11-20T18:30:00.000Z"
+}
+```
+
+#### 🔒 Criterio Aplicado sobre Endpoints Internos en Producción (`/api/mocks`, `/api/loggerTest` y `/api/docs`)
+Mediante el middleware [`src/middlewares/internalEndpointGuard.js`](src/middlewares/internalEndpointGuard.js) se aplicó una política de **seguridad por defecto (Secure by Default)**:
+1. **En `development` y `test`:** Todos los endpoints internos (`/api/mocks/*`, `/api/loggerTest`, `/api/docs`) están **100% activos** para facilitar el desarrollo, las pruebas automatizadas y la revisión interactiva.
+2. **En `production` (`NODE_ENV=production`):**
+   - **`/api/mocks` y `/api/loggerTest`:** Quedan **bloqueados automáticamente** respondiendo `403 Forbidden` (`FORBIDDEN_OPERATION`), para impedir que un tercero inserte datos falsos (`/seed`) o inunde los archivos de logs en producción. Solo se habilitan si el administrador define explícitamente `ENABLE_INTERNAL_ENDPOINTS_IN_PROD=true`.
+   - **Swagger UI (`/api/docs` y `/api/docs.json`):** Queda **restringido por defecto en producción** (`403 FORBIDDEN_OPERATION`) para no exponer la topología interna de la API públicamente, pero puede habilitarse de forma controlada en entornos de staging/demo pasando la variable `ENABLE_SWAGGER_IN_PROD=true` al contenedor Docker.
+
+---
+
+### 3. Contenerización con Docker (`Dockerfile` y `.dockerignore`)
+
+El proyecto incluye un [`Dockerfile`](Dockerfile) optimizado basado en `node:20-alpine` que:
+- Instala únicamente dependencias de producción con `npm ci --omit=dev`.
+- Se ejecuta bajo el usuario sin privilegios `USER node`.
+- Expone el puerto **`3000`** (`EXPOSE 3000`).
+- Incluye un `HEALTHCHECK` nativo que monitorea `http://localhost:3000/api/health`.
+
+#### 🚫 Archivos Excluidos del Repositorio y de la Imagen Docker (`.gitignore` y `.dockerignore`)
+Nunca deben subirse al repositorio ni copiarse dentro de la imagen Docker:
+- `node_modules/`
+- Archivos de entorno con credenciales (`.env`, `.env.test`, `.env.*`)
+- Historial de Git (`.git/`)
+- Archivos de registro generados por Winston (`logs/*.log`)
+- Archivos subidos por usuarios con Multer (`uploads/*`)
+- Reportes de coverage, carpetas de tests y archivos temporales (`coverage/`, `test/`, `*.tmp`)
+
+> **Aclaración sobre `logs/` y `uploads/` en Producción / Docker:** Los archivos subidos a `uploads/` y los registros en `logs/` dentro de un contenedor son efímeros por diseño. En un despliegue productivo real deben montarse como volúmenes externos de Docker (`-v`) o delegarse a almacenamiento de objetos (S3 / Cloud Storage) y colectores de logs, nunca utilizarse como almacenamiento permanente dentro de la capa del contenedor ni subirse a GitHub.
+
+#### 🐳 Cómo Construir la Imagen y Ejecutar el Contenedor Docker
+
+1. **Construir la imagen Docker:**
+   ```bash
+   docker build -t shipnow-api:1.0 .
+   ```
+
+2. **Ejecutar el contenedor pasando tu archivo `.env`:**
+   *(Para poder probar Swagger y Mocks dentro del contenedor aunque corra en modo producción, podés pasar los flags `ENABLE_SWAGGER_IN_PROD=true` y `ENABLE_INTERNAL_ENDPOINTS_IN_PROD=true`)*:
+   ```bash
+   docker run -d \
+     --name shipnow-container \
+     -p 3000:3000 \
+     --env-file .env \
+     -e ENABLE_SWAGGER_IN_PROD=true \
+     -e ENABLE_INTERNAL_ENDPOINTS_IN_PROD=true \
+     shipnow-api:1.0
+   ```
+
+3. **Probar el contenedor en ejecución:**
+   - **Health Check:** [http://localhost:3000/api/health](http://localhost:3000/api/health)
+   - **Swagger UI:** [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
+   - **Endpoint principal (Usuarios paginados):** [http://localhost:3000/api/users?page=1&limit=10](http://localhost:3000/api/users?page=1&limit=10)
+
+4. **Ver logs o detener el contenedor:**
+   ```bash
+   docker logs -f shipnow-container
+   docker stop shipnow-container && docker rm shipnow-container
+   ```
 
 ---
 
 ## 📂 Carga de Archivos, Documentos y Comprobantes con Multer (Pre-entrega Módulo 7)
 
-La API incorpora gestión completa de archivos mediante **Multer** (`multipart/form-data`), separando la configuración en [`src/config/multer.config.js`](src/config/multer.config.js) para mantener los routers limpios y conectando todas las validaciones al sistema centralizado de errores y al logger de Winston.
-
-### 🗂️ Estructura de Carpetas de Almacenamiento (`/uploads`)
-
-Los archivos físicos se almacenan en el servidor organizados por subcarpetas según el tipo de documento (`DOCUMENT_TYPES`):
-
-- `uploads/users/documents/` — Documentos de identidad / generales de usuario (`user_document`).
-- `uploads/users/licenses/` — Licencias de conducir de repartidores (`driver_license`).
-- `uploads/deliveries/proofs/` — Comprobantes asociados a entregas y pedidos (`delivery_proof`).
-
-> **Exclusión en Git (`.gitignore`):** La carpeta `uploads/*` está ignorada en `.gitignore` (conservando únicamente `uploads/.gitkeep`) para evitar que archivos subidos durante pruebas o uso local se suban a GitHub.
-
-### 🛡️ Validaciones y Reglas de Almacenamiento
-
-1. **Formatos permitidos:** `PDF`, `JPG`, `JPEG`, `PNG` y `WEBP` (validación doble de `mimetype` y extensión).
-2. **Tamaño máximo:** **5 MB** por archivo (`MAX_FILE_SIZE = 5 * 1024 * 1024`).
-3. **Nombre del campo de archivo:** `file`.
-4. **Prevención de archivos huérfanos:** El archivo se valida en memoria y **solo se escribe en disco después de confirmar que la entidad destino (usuario, entrega o pedido) existe en MongoDB** y que el `documentType` es válido.
-5. **Solo metadatos en MongoDB:** En la base de datos nunca se guarda el binario del archivo, sino exclusivamente sus metadatos:
-   - `originalName` / `name`: Nombre original del archivo.
-   - `filename`: Nombre único generado con timestamp y sufijo aleatorio.
-   - `path` / `reference`: Ruta relativa en el servidor (ej. `uploads/users/licenses/...`).
-   - `mimetype`: Tipo MIME validado.
-   - `size`: Tamaño en bytes.
-   - `documentType`: `user_document`, `driver_license` o `delivery_proof`.
-   - `uploadedAt`: Fecha de carga.
-
-### 📡 Endpoints de Carga de Archivos (`multipart/form-data`)
-
-| Método y Ruta | Campo Archivo | Campos Adicionales | Descripción |
-| :--- | :---: | :---: | :--- |
-| **`POST /api/users/:id/documents`** | `file` (requerido) | `documentType` (`user_document` \| `driver_license` \| `delivery_proof`) | Sube un documento o licencia, lo guarda en la subcarpeta correspondiente y registra sus metadatos en `user.documents`. |
-| **`POST /api/deliveries/:id/proof`** | `file` (requerido) | `documentType` (opcional, default: `delivery_proof`) | Sube un comprobante de entrega, lo almacena en `uploads/deliveries/proofs` y registra los metadatos en `delivery.proof` y `delivery.proofs`. |
-| **`POST /api/orders/:id/proof`** | `file` (requerido) | `documentType` (opcional, default: `delivery_proof`) | Sube un comprobante asociado a un pedido y registra sus metadatos en `order.proof` y `order.proofs`. |
+Configurado centralizadamente en [`src/config/multer.config.js`](src/config/multer.config.js) utilizando **`multer.diskStorage`**:
+- **Subcarpetas por tipo de documento:**
+  - `uploads/users/documents/` (`user_document`)
+  - `uploads/users/licenses/` (`driver_license`)
+  - `uploads/deliveries/proofs/` (`delivery_proof`)
+- **Límites y Validaciones:** Máximo **5 MB**, formatos permitidos `PDF`, `JPG`, `JPEG`, `PNG`, `WEBP`. Si la entidad destino no existe o el `documentType` es inválido, el archivo se limpia de forma asíncrona con `removeUploadedFileAsync()`.
+- **Endpoints `multipart/form-data` (campo `file`):**
+  - `POST /api/users/:id/documents`
+  - `POST /api/deliveries/:id/proof`
+  - `POST /api/orders/:id/proof`
 
 ---
 
-## 🧪 Testing Funcional Automatizado (Pre-entrega Módulo 6 y 7)
+## 🧪 Testing Funcional Automatizado (Pre-entrega Módulo 6, 7 y 8)
 
-El proyecto cuenta con una suite de **50 tests funcionales automatizados** que validan de punta a punta el comportamiento de todos los módulos, incluyendo la carga de archivos con Multer.
-
-### 🛠️ Herramientas Utilizadas
-
-| Herramienta | Rol en la Suite de Testing |
-| :--- | :--- |
-| **Mocha** | Test runner encargado de estructurar los bloques (`describe`, `it`), gestionar los hooks de ciclo de vida (`before`, `beforeEach`, `afterEach`, `after`) y ejecutar las pruebas. |
-| **Chai** | Librería de aserciones (`expect`) utilizada para validar tipos de datos, códigos de estado, propiedades obligatorias y códigos del diccionario de errores. |
-| **Supertest** | Cliente HTTP de alto nivel que importa directamente `src/app.js` (soportando JSON y `multipart/form-data` con `.attach()` y `.field()`) sin abrir manualmente un puerto. |
-| **cross-env** | Garantiza la inyección multiplataforma de `NODE_ENV=test` al ejecutar el comando de pruebas. |
-
-### 🔐 Separación del Entorno de Testing y Limpieza
-
-- [`src/app.js`](src/app.js) define la aplicación Express desacoplada de `app.listen()`.
-- En [`test/setup.test.js`](test/setup.test.js), si la base de datos remota no está accesible, se registra explícitamente una advertencia en el logger indicando el motivo de conexión antes de activar el adaptador de persistencia en memoria para que ningún error de entorno quede oculto.
-- Los archivos físicos creados durante las pruebas de carga (`test/uploads.test.js`) se limpian automáticamente en el hook `afterEach` para mantener limpia la carpeta `uploads/`.
-
-### ▶️ Cómo Ejecutar los Tests
+El proyecto cuenta con **59 tests funcionales automatizados** con **Mocha**, **Chai** y **Supertest**:
 
 ```bash
 npm test
 ```
 
-### 📋 Suites de Pruebas en `/test` (50 Passing)
-
-1. **`test/users.test.js` (`/api/users`):** ABM de usuarios y errores (`VALIDATION_ERROR`, `INVALID_USER_ROLE`, `FORBIDDEN_OPERATION`, `CONFLICT_ERROR`, `USER_NOT_FOUND`).
-2. **`test/orders.test.js` (`/api/orders`):** Creación con cálculo de costos, consulta, actualización de estados y errores (`VALIDATION_ERROR`, `USER_NOT_FOUND`, `INVALID_STATUS`, `ORDER_NOT_FOUND`).
-3. **`test/deliveries.test.js` (`/api/deliveries`):** Creación vinculada a pedido y repartidor, cambio de estado y errores (`INVALID_USER_ROLE`, `INVALID_STATUS`, `DELIVERY_NOT_FOUND`).
-4. **`test/mocks.test.js` (`/api/mocks`):** Generación en memoria (`/users`, `/mockingUsers`, `/orders`), inserción con `POST /seed` y errores (`INVALID_QUANTITY`, `VALIDATION_ERROR`).
-5. **`test/uploads.test.js` (Documentos y Comprobantes con Multer):**
-   - Carga exitosa de documento PDF en usuario (`201`), comprobante PNG en entrega (`201`) y comprobante JPG en pedido (`201`), verificando archivo físico en disco y metadatos en la entidad.
-   - Errores: falta de archivo (`400 FILE_REQUIRED`), tipo de archivo inválido (`400 INVALID_FILE_TYPE`), `documentType` inválido (`400 INVALID_DOCUMENT_TYPE`), archivo mayor a 5 MB (`400 FILE_TOO_LARGE`), y entidad inexistente (`404 USER_NOT_FOUND`, `404 DELIVERY_NOT_FOUND`, `404 ORDER_NOT_FOUND`).
-6. **`test/system.test.js` (Logger, Swagger y 404):** Validación de `/api/loggerTest`, `/loggerTest`, `/api/docs/`, `/api/docs.json` y rutas inexistentes (`404 ROUTE_NOT_FOUND`).
+### Suites Cubiertas en `/test` (`59 passing`)
+1. **`test/users.test.js`:** ABM completo de usuarios y validación de errores de dominio.
+2. **`test/orders.test.js`:** Creación con cálculo de envío, consulta, actualización de estados y errores.
+3. **`test/deliveries.test.js`:** Asignación de repartidores, cambio de estado y errores.
+4. **`test/mocks.test.js`:** Generación en memoria (`/users`, `/mockingUsers`, `/orders`) y `POST /seed`.
+5. **`test/uploads.test.js`:** Subida de documentos PDF y comprobantes PNG/JPG con `multer.diskStorage`, verificación en disco, metadatos en DB y errores (`FILE_REQUIRED`, `INVALID_FILE_TYPE`, `FILE_TOO_LARGE`, `INVALID_DOCUMENT_TYPE`).
+6. **`test/system.test.js`:** Validación de `/api/loggerTest`, `/loggerTest`, `/api/docs/`, `/api/docs.json` y `404 ROUTE_NOT_FOUND`.
+7. **`test/performance_production.test.js`:** Paginación (`page`, `limit`), filtros (`role`, `status`), validación de variables de entorno al inicio, health check sin exposición de secretos y bloqueo de endpoints internos en `NODE_ENV=production`.
 
 ---
 
 ## 📖 Documentación Interactiva con Swagger / OpenAPI (Pre-entrega Módulo 5)
 
-Una vez iniciado el servidor en el puerto `3000`, la documentación interactiva se encuentra en:
-
+Con el servidor corriendo en el puerto `3000`:
 - **Swagger UI:** [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
 - **OpenAPI JSON Spec:** [http://localhost:3000/api/docs.json](http://localhost:3000/api/docs.json)
 
-Incluye todos los módulos agrupados por tags (`Users`, `Orders`, `Deliveries`, `Products`, `Mocks`, `Logger`), todos los aliases (`/api/mocks/mockingUsers`, `/loggerTest`, `/api/health`, `/health`) y los endpoints `multipart/form-data` de carga de documentos y comprobantes listos para probar desde el botón **"Try it out"** seleccionando un archivo desde tu computadora.
-
 ---
 
-## 🛡️ Diccionario Centralizado de Errores
-
-Todos los errores del sistema responden con la estructura uniforme `ErrorResponse`:
-```json
-{
-  "status": "error",
-  "message": "Descripción clara del problema",
-  "code": "CODIGO_ESTANDARIZADO"
-}
-```
-
-Códigos soportados en [`src/utils/errorDictionary.js`](src/utils/errorDictionary.js):
-- **Validación y Dominio (400):** `VALIDATION_ERROR`, `INVALID_QUANTITY`, `INVALID_USER_ROLE`, `INVALID_STATUS`
-- **Archivos / Multer (400 / 500):** `FILE_REQUIRED` (400), `INVALID_FILE_TYPE` (400), `FILE_TOO_LARGE` (400), `INVALID_DOCUMENT_TYPE` (400), `FILE_STORAGE_ERROR` (500)
-- **Permisos y Conflictos (403 / 409):** `FORBIDDEN_OPERATION` (403), `CONFLICT_ERROR` (409)
-- **Recursos No Encontrados (404):** `ROUTE_NOT_FOUND`, `USER_NOT_FOUND`, `PRODUCT_NOT_FOUND`, `ORDER_NOT_FOUND`, `DELIVERY_NOT_FOUND`
-- **Servidor y Base de Datos (500):** `INTERNAL_SERVER_ERROR`, `DATABASE_ERROR`
-
----
-
-## 🚀 Instalación y Ejecución
+## 🚀 Cómo Correr la API Localmente
 
 1. **Instalar dependencias:**
    ```bash
    npm install
    ```
 2. **Configurar variables de entorno:**
-   Copiar `.env.example` a `.env` (puerto `3000`).
-3. **Iniciar en desarrollo:**
+   ```bash
+   cp .env.example .env
+   ```
+3. **Iniciar en modo desarrollo (puerto 3000):**
    ```bash
    npm run dev
    ```
-4. **Ejecutar los 50 tests funcionales:**
+4. **Iniciar en modo producción:**
+   ```bash
+   npm start
+   ```
+5. **Ejecutar la suite de 59 tests funcionales:**
    ```bash
    npm test
    ```
