@@ -4,8 +4,12 @@ npm-debug.log*
 docs-clase
 .env
 .env.test
+!.env.example
+!.env.test.example
 logs/*
 !logs/.gitkeep
 uploads/*
 !uploads/.gitkeep
+coverage
+.nyc_output
 *.log

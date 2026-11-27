@@ -4,11 +4,20 @@ import fs from 'fs';
 
 const isTestEnv = process.env.NODE_ENV === 'test';
 const testEnvPath = path.resolve(process.cwd(), '.env.test');
+const defaultEnvPath = path.resolve(process.cwd(), '.env');
+const testEnvExamplePath = path.resolve(process.cwd(), '.env.test.example');
 
-if (isTestEnv && fs.existsSync(testEnvPath)) {
-  dotenv.config({ path: testEnvPath });
+if (isTestEnv) {
+  if (fs.existsSync(testEnvPath)) {
+    dotenv.config({ path: testEnvPath });
+  } else if (fs.existsSync(defaultEnvPath)) {
+    dotenv.config({ path: defaultEnvPath });
+  } else if (fs.existsSync(testEnvExamplePath)) {
+    dotenv.config({ path: testEnvExamplePath });
+  }
+} else {
+  dotenv.config();
 }
-dotenv.config();
 
 const requiredEnvVars = ['PORT', 'MONGODB_URI', 'NODE_ENV', 'JWT_SECRET', 'SHIPPING_API_KEY'];
 
