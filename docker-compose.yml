@@ -1,0 +1,50 @@
+services:
+  shipnow-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shipnow-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: ${NODE_ENV:-production}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://shipnow-mongo:27017/shipnow}
+      JWT_SECRET: ${JWT_SECRET:-shipnow_docker_jwt_secret}
+      SHIPPING_API_KEY: ${SHIPPING_API_KEY:-shipnow_docker_shipping_key}
+      EXTERNAL_SHIPPING_API_URL: ${EXTERNAL_SHIPPING_API_URL:-https://api.shipping.shipnow.internal/v1/rates}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENABLE_SWAGGER_IN_PROD: ${ENABLE_SWAGGER_IN_PROD:-true}
+      ENABLE_INTERNAL_ENDPOINTS_IN_PROD: ${ENABLE_INTERNAL_ENDPOINTS_IN_PROD:-true}
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./uploads:/usr/src/app/uploads
+    depends_on:
+      shipnow-mongo:
+        condition: service_healthy
+    networks:
+      - shipnow-network
+
+  shipnow-mongo:
+    image: mongo:7
+    container_name: shipnow-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - shipnow_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shipnow-network
+
+volumes:
+  shipnow_mongo_data:
+
+networks:
+  shipnow-network:
+    driver: bridge

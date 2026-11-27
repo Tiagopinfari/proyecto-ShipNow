@@ -1,10 +1,44 @@
 paths:
   /api/users:
     get:
-      summary: Listar todos los usuarios
-      description: Obtiene el listado completo de usuarios registrados en la base de datos.
+      summary: Listar usuarios con paginación y filtros
+      description: Obtiene el listado paginado de usuarios registrados en la base de datos (por defecto `page=1`, `limit=20`, máximo `100`), permitiendo filtrar por rol y correo electrónico.
       tags:
         - Users
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Número de página a consultar
+          example: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Cantidad máxima de registros por página (máx. 100)
+          example: 20
+        - in: query
+          name: role
+          required: false
+          schema:
+            type: string
+            enum: [admin, customer, driver, store, user, cliente, repartidor]
+          description: Filtrar usuarios por rol específico
+          example: "driver"
+        - in: query
+          name: email
+          required: false
+          schema:
+            type: string
+          description: Filtrar por coincidencia exacta de email
       responses:
         '200':
           description: Lista de usuarios obtenida exitosamente

@@ -1,10 +1,58 @@
 paths:
   /api/deliveries:
     get:
-      summary: Listar todas las entregas
-      description: Obtiene el listado completo de entregas logísticas con sus referencias a pedidos y repartidores.
+      summary: Listar entregas con paginación y filtros
+      description: Obtiene el listado paginado de entregas logísticas (`page=1`, `limit=20` por defecto, máximo `100`), permitiendo filtrar por `status`, `priority`, `driver` y `order`.
       tags:
         - Deliveries
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Número de página
+          example: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Cantidad máxima de entregas por página (máx. 100)
+          example: 20
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [pending, assigned, in_transit, delivered]
+          description: Filtrar entregas por estado operativo
+          example: "delivered"
+        - in: query
+          name: priority
+          required: false
+          schema:
+            type: string
+            enum: [low, normal, high]
+          description: Filtrar entregas por prioridad
+          example: "normal"
+        - in: query
+          name: driver
+          required: false
+          schema:
+            type: string
+          description: Filtrar entregas por ID del repartidor asignado
+        - in: query
+          name: order
+          required: false
+          schema:
+            type: string
+          description: Filtrar entregas por ID del pedido asociado
       responses:
         '200':
           description: Lista de entregas obtenida exitosamente
